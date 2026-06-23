@@ -1,0 +1,129 @@
+## AdmisDB — Clean Structure + Full Roadmap
+
+---
+
+### Recommended Folder Structure
+
+```
+admisdb/
+├── supabase/                          ← All DB work
+│   ├── migrations/                    ← SQL migration files (numbered)
+│   │   ├── 001_init_schema.sql
+│   │   ├── 002_rls_policies.sql
+│   │   └── 003_seed_data.sql
+│   └── schema.md                      ← Table reference doc
+│
+└── admisdb-frontend/                  ← Next.js app
+    ├── app/
+    │   ├── page.tsx                   ← Landing + auth (done)
+    │   ├── landing-page.tsx           ← Client component (done)
+    │   ├── auth/
+    │   │   └── callback/route.ts      ← OAuth + email verify (done)
+    │   ├── (auth)/
+    │   │   ├── login/page.tsx         ← Redirects to / (done)
+    │   │   └── signup/page.tsx        ← Redirects to / (done)
+    │   └── dashboard/
+    │       ├── brand/
+    │       │   ├── page.tsx           ← Redirects to discover (done)
+    │       │   ├── discover/          ← Creator Discovery (done)
+    │       │   ├── campaigns/         ← ← Screen 3
+    │       │   │   ├── page.tsx
+    │       │   │   ├── new/page.tsx
+    │       │   │   └── [id]/page.tsx
+    │       │   ├── deals/page.tsx     ← Screen 4
+    │       │   └── settings/page.tsx  ← Screen 5
+    │       └── creator/
+    │           ├── page.tsx           ← Redirects to discover (done)
+    │           ├── discover/          ← Campaign Discovery (done)
+    │           ├── applications/      ← Screen 3
+    │           │   └── page.tsx
+    │           ├── deals/page.tsx     ← Screen 4
+    │           └── settings/page.tsx  ← Screen 5
+    ├── components/
+    │   ├── ui/                        ← Shared: Button, Badge, Input, Modal
+    │   ├── brand/                     ← Brand-specific components
+    │   └── creator/                   ← Creator-specific components
+    ├── lib/
+    │   ├── supabase/
+    │   │   ├── client.ts              ← Browser client (done)
+    │   │   └── server.ts              ← Server client (done)
+    │   └── utils.ts                   ← fmt helpers (numbers, dates)
+    ├── middleware.ts                   ← Auth guard (done)
+    └── .env.local
+```
+
+---
+
+### Full Screen Roadmap
+
+| # | Screen | Route | Who sees it | Status |
+|---|--------|-------|-------------|--------|
+| 1 | Landing + Auth | `/` | Everyone | ✅ Done |
+| 2a | Creator Discovery | `/dashboard/creator/discover` | Creators | ✅ Done |
+| 2b | Brand Discovery | `/dashboard/brand/discover` | Brands | ✅ Done |
+| 3a | Brand — Campaign Manager | `/dashboard/brand/campaigns` | Brands | ⬜ Next |
+| 3b | Brand — Create Campaign | `/dashboard/brand/campaigns/new` | Brands | ⬜ Next |
+| 3c | Creator — My Applications | `/dashboard/creator/applications` | Creators | ⬜ Next |
+| 4a | Brand — Deals | `/dashboard/brand/deals` | Brands | ⬜ |
+| 4b | Creator — Deals | `/dashboard/creator/deals` | Creators | ⬜ |
+| 5 | Messaging | `/dashboard/[role]/messages` | Both | ⬜ |
+| 6 | Settings / Profile | `/dashboard/[role]/settings` | Both | ⬜ |
+
+**Build order:** 3a → 3b → 3c → 4a/4b → 5 → 6
+
+---
+
+### How to Continue in a New Chat
+
+Paste this block at the start of every new chat:
+
+```
+## AdmisDB — Project Context
+
+Stack: Next.js 14 App Router + TypeScript + Supabase
+Supabase project ID: mnscwajiozkqvxuhpuai
+Brand color: #5710fc (purple)
+Dark theme: bg #090c12, card #10141e, sidebar #0b0e16, border #1d2433
+
+### Auth
+- Landing page (/) has embedded signup/login
+- Auth callback: /auth/callback/route.ts handles both PKCE code + token_hash
+- Middleware protects /dashboard/*, public paths: ['/'], ['/forgot-password'], ['/auth/']
+- On login: redirects to /dashboard/{role} which redirects to /dashboard/{role}/discover
+
+### Done screens
+- / — Landing with auth panel
+- /dashboard/brand/discover — Creator Discovery (259K creators, filters, pagination)
+- /dashboard/creator/discover — Campaign Discovery (24 seeded campaigns, filters)
+
+### Database (key tables)
+- profiles: id, role (brand|creator|admin|agency), display_name
+- creators: platform (youtube|instagram|tiktok), followers, subscribers, engagement_rate, geo_country
+- brands: name, slug, logo_url, is_verified, category_id
+- campaigns: brand_id, title, brief, platforms (text[]), deal_type (paid_post|affiliate|gifting|ambassador), payout_model (flat|commission|product_cash), payout_amount, budget_total, status (draft|open|paused|closed|filled), deadline, min_followers, min_engagement_rate
+- campaign_applications: campaign_id, creator_id, status (applied|shortlisted|accepted|rejected|withdrawn), bid_amount, message
+- deals: campaign_id, brand_id, creator_id, price, status (active|submitted|approved|completed|cancelled|disputed), deadline
+
+### File locations
+- lib/supabase/client.ts — createBrowserClient
+- lib/supabase/server.ts — createServerClient (async)
+- All dashboard pages use server component for auth check, then pass initials to client component
+
+### Next screen to build: [FILL THIS IN]
+```
+
+The last line is the only thing you change each session — just update "Next screen to build" to whatever you're working on, like `Brand Campaign Manager (/dashboard/brand/campaigns)`.
+
+---
+
+### Quick reference for each upcoming screen
+
+**Screen 3a — Brand Campaign Manager:** list brand's own campaigns with status badges, applicant count, budget. Pull from `campaigns` table filtered by `brand_id`.
+
+**Screen 3b — Create Campaign:** form with all campaign fields. Inserts into `campaigns` with `brand_id` from brand profile.
+
+**Screen 3c — Creator Applications:** list creator's own applications with campaign title, brand name, bid amount, status. Join `campaign_applications` + `campaigns` + `brands`.
+
+**Screen 4 — Deals:** active deals for both sides. Join `deals` + `campaigns` + `brands/creators`.
+
+**Screen 5 — Messages:** conversations list + message thread. Uses `conversations` + `messages` tables (already in DB).
