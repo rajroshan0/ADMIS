@@ -345,8 +345,9 @@ function CompleteProfileForm({ userId, email }: { userId: string; email: string 
 }
 
 // ─── Inbox / Chat component ───────────────────────────────────────────────────
-function MessagesTab({ conversations, userId }: { conversations: Conversation[]; userId: string }) {
+function MessagesTab({ conversations, userId, creatorId }: { conversations: Conversation[]; userId: string; creatorId: string }) {
   const supabase  = createClient()
+  const [liveConvs, setLiveConvs] = useState<Conversation[]>(conversations)
   const [selected,  setSelected]  = useState<Conversation | null>(conversations[0] ?? null)
   const [messages,  setMessages]  = useState<Message[]>([])
   const [loadingM,  setLoadingM]  = useState(false)
@@ -356,6 +357,27 @@ function MessagesTab({ conversations, userId }: { conversations: Conversation[];
 
   // Auto-scroll on new messages
   useEffect(() => { bottomRef.current?.scrollIntoView({ behavior: 'smooth' }) }, [messages])
+
+  // Realtime: listen for new conversations opened by brands
+  useEffect(() => {
+    if (!creatorId) return
+    const ch = supabase
+      .channel(`creator_new_convs_${creatorId}`)
+      .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'conversations', filter: `creator_id=eq.${creatorId}` },
+        async (payload) => {
+          // Fetch full conversation with brand details
+          const { data } = await supabase
+            .from('conversations')
+            .select('id, brand_id, creator_id, last_msg_at, created_at, brands(id, name, logo_url, owner_id)')
+            .eq('id', (payload.new as any).id)
+            .single()
+          if (data) {
+            setLiveConvs(prev => prev.find(c => c.id === data.id) ? prev : [data as unknown as Conversation, ...prev])
+          }
+        })
+      .subscribe()
+    return () => { supabase.removeChannel(ch) }
+  }, [creatorId])
 
   // Realtime: subscribe to new messages in selected conversation
   useEffect(() => {
@@ -415,7 +437,7 @@ function MessagesTab({ conversations, userId }: { conversations: Conversation[];
   }
 
   // Load messages for first conversation on mount
-  useEffect(() => { if (conversations[0]) loadMessages(conversations[0]) }, [])
+  useEffect(() => { if (liveConvs[0]) loadMessages(liveConvs[0]) }, [])
 
   function fmtTime(s: string) {
     const d = new Date(s)
@@ -431,7 +453,7 @@ function MessagesTab({ conversations, userId }: { conversations: Conversation[];
     return name.split(' ').filter(Boolean).map(w => w[0]).join('').slice(0, 2).toUpperCase()
   }
 
-  if (conversations.length === 0) {
+  if (liveConvs.length === 0) {
     return (
       <div style={{ background: T.card, border: `1px solid ${T.border}`, borderRadius: 14, padding: '60px 24px', textAlign: 'center' }}>
         <div style={{ fontSize: 40, marginBottom: 14 }}>💬</div>
@@ -448,7 +470,7 @@ function MessagesTab({ conversations, userId }: { conversations: Conversation[];
         <div style={{ padding: '12px 14px', borderBottom: `1px solid ${T.border}`, fontSize: 12, fontWeight: 700, color: T.dim, textTransform: 'uppercase', letterSpacing: '.06em' }}>
           Inbox
         </div>
-        {conversations.map(conv => {
+        {liveConvs.map(conv => {
           const brand = conv.brands
           const isActive = selected?.id === conv.id
           return (
@@ -583,7 +605,7 @@ export default function CreatorProfileView({ user, creator, handles, bids, conne
   const router   = useRouter()
   const supabase = createClient()
 
-  type Tab = 'overview' | 'platforms' | 'bids' | 'connections' | 'messages' | 'analytics' | 'settings'
+  type Tab = 'overview' | 'platforms' | 'bids' | 'connections' | 'messages' | 'settings'
   const [tab, setTab]             = useState<Tab>('overview')
   const [showRates, setShowRates] = useState(false)
   const [rates, setRates]         = useState<Record<string, Record<string, number>>>(creator?.rates ?? {})
@@ -695,7 +717,6 @@ export default function CreatorProfileView({ user, creator, handles, bids, conne
     { key: 'bids',        label: 'My Bids'      },
     { key: 'connections', label: 'Connections'  },
     { key: 'messages',    label: 'Messages'     },
-    { key: 'analytics',   label: 'Analytics'    },
     { key: 'settings',    label: 'Settings'     },
   ] as const
 
@@ -736,7 +757,6 @@ export default function CreatorProfileView({ user, creator, handles, bids, conne
             { key: 'bids',        label: '📋  My Bids'     },
             { key: 'connections', label: '🤝  Connections' },
             { key: 'messages',    label: '💬  Messages'    },
-            { key: 'analytics',   label: '📊  Analytics'   },
           ] as const).map(item => (
             <button key={item.key} onClick={() => setTab(item.key)}
               style={{ display: 'block', width: '100%', textAlign: 'left', padding: '8px 12px', borderRadius: 8, fontSize: 13, fontWeight: tab === item.key ? 600 : 400,
@@ -775,7 +795,7 @@ export default function CreatorProfileView({ user, creator, handles, bids, conne
         <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', marginBottom: 28 }}>
           <div>
             <h1 style={{ fontSize: 22, fontWeight: 700, margin: '0 0 4px', color: T.text }}>
-              {tab === 'overview' ? 'Your profile' : tab === 'bids' ? 'My Bids' : tab === 'connections' ? 'Connections' : tab === 'messages' ? 'Messages' : tab === 'analytics' ? 'Analytics' : 'Settings'}
+              {tab === 'overview' ? 'Your profile' : tab === 'bids' ? 'My Bids' : tab === 'connections' ? 'Connections' : tab === 'messages' ? 'Messages' : 'Settings'}
             </h1>
             <p style={{ fontSize: 13, color: T.dim, margin: 0 }}>
               {tab === 'overview' ? 'Manage your channels, rates, and public presence' : ''}
@@ -1141,16 +1161,7 @@ export default function CreatorProfileView({ user, creator, handles, bids, conne
 
         {/* ── Messages tab ─────────────────────────────────── */}
         {tab === 'messages' && (
-          <MessagesTab conversations={conversations} userId={user.id} />
-        )}
-
-        {/* ── Analytics tab ────────────────────────────────── */}
-        {tab === 'analytics' && (
-          <ComingSoon
-            icon="📊"
-            title="Analytics coming soon"
-            desc="Track your profile views, campaign success rate, and earnings over time. Connect more platforms to unlock richer insights."
-          />
+          <MessagesTab conversations={conversations} userId={user.id} creatorId={creator?.id ?? ''} />
         )}
 
         {/* ── Settings tab ─────────────────────────────────── */}

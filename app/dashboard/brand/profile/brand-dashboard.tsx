@@ -691,6 +691,21 @@ function ApplicationsView({ applications, conversations, deals, teamMembers, bra
     setLiveApps(as => as.map(a => a.id === appId ? { ...a, assigned_to: userId || null } : a))
   }
 
+  // Open (or create) a conversation with a creator, then go to Messages tab
+  async function openChat(app: Application) {
+    if (!brandId || !app.creator_id) return
+    // Check if conversation already exists
+    let { data: conv } = await supabase.from('conversations')
+      .select('id').eq('brand_id', brandId).eq('creator_id', app.creator_id).maybeSingle()
+    if (!conv) {
+      const { data: newConv } = await supabase.from('conversations')
+        .insert({ brand_id: brandId, creator_id: app.creator_id, application_id: app.id })
+        .select('id').single()
+      conv = newConv
+    }
+    onGoTab('messages')
+  }
+
   // Accept → negotiate → create deal
   function startNegotiate(app: Application) {
     setNegotiating(n => ({ ...n, [app.id]: { price: String(app.bid_amount ?? app.creators?.price_per_post ?? ''), notes: '', pay_method: 'upi', pay_name: '', pay_account: '', loading: false } }))
@@ -876,6 +891,9 @@ function ApplicationsView({ applications, conversations, deals, teamMembers, bra
                     {/* Action buttons */}
                     {!neg && (
                       <div style={{ display: 'flex', gap: 6, marginTop: 12, flexWrap: 'wrap' }}>
+                        <Btn onClick={() => openChat(app)}>
+                          <i className="ti ti-message" />Message
+                        </Btn>
                         {app.status !== 'shortlisted' && app.status !== 'accepted' && app.status !== 'rejected' && (
                           <Btn onClick={() => changeStatus(app, 'shortlisted')}>
                             <i className="ti ti-eye" />Shortlist

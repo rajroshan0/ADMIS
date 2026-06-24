@@ -82,8 +82,8 @@ const PRIORITY_COLORS: Record<string, string> = {
   low: '#9ca3af', medium: '#854D0E', high: '#dc2626', urgent: '#7F1D1D',
 }
 const TASK_STATUS_CFG: Record<string, { label: string; cls: string; next: string }> = {
-  todo:        { label: 'To Do',       cls: 'b-gray', next: 'in-progress' },
-  'in-progress': { label: 'In Progress', cls: 'b-warn', next: 'review' },
+  todo:        { label: 'To Do',       cls: 'b-gray', next: 'in_progress' },
+  in_progress: { label: 'In Progress', cls: 'b-warn', next: 'review' },
   review:      { label: 'In Review',   cls: 'b-info', next: 'done' },
   done:        { label: '✓ Done',      cls: 'b-ok',   next: 'todo' },
 }
@@ -98,11 +98,11 @@ const STATUS_CFG: Record<string, { label: string; cls: string }> = {
   rejected:  { label: 'Rejected',  cls: 'b-red'  },
 }
 
-type Tab = 'overview' | 'deals' | 'apps' | 'tasks' | 'dept' | 'payments' | 'messages' | 'content' | 'team' | 'profile'
+type Tab = 'overview' | 'deals' | 'apps' | 'tasks' | 'dept' | 'payments' | 'messages' | 'content' | 'team' | 'history' | 'profile'
 const TAB_TITLES: Record<Tab, string> = {
   overview: 'Dashboard', deals: 'Deals', apps: 'Applications',
   tasks: 'Task Manager', dept: 'Departments', payments: 'Payments',
-  messages: 'Messages', content: 'Content', team: 'Team Members', profile: 'Profile',
+  messages: 'Messages', content: 'Content', team: 'Team Members', history: 'Activity History', profile: 'Profile',
 }
 
 // ─── Shared CSS (same as brand dashboard) ────────────────────────────────────
@@ -251,15 +251,46 @@ function TasksView({ tasks: init, brandMembers, brandId, userId, supabase }: {
   tasks: BTask[]; brandMembers: BrandMember[]; brandId: string; userId: string
   supabase: ReturnType<typeof createClient>
 }) {
-  const [tasks, setTasks]       = useState<BTask[]>(init)
-  const [filterDept, setFDept]  = useState('all')
-  const [filterStatus, setFSt]  = useState('all')
-  const [openChat, setOpenChat] = useState<string | null>(null)
+  const [tasks, setTasks]             = useState<BTask[]>(init)
+  const [filterDept, setFDept]        = useState('all')
+  const [filterStatus, setFSt]        = useState('all')
+  const [viewMode, setViewMode]       = useState<'mine' | 'all'>('mine')
+  const [openChat, setOpenChat]       = useState<string | null>(null)
+  const [showCreate, setShowCreate]   = useState(false)
+  const [newTitle, setNewTitle]       = useState('')
+  const [newDesc, setNewDesc]         = useState('')
+  const [newDept, setNewDept]         = useState('internal')
+  const [newPriority, setNewPriority] = useState('medium')
+  const [newAssigned, setNewAssigned] = useState('')
+  const [newDueDate, setNewDueDate]   = useState('')
+  const [creating, setCreating]       = useState(false)
+  const [createErr, setCreateErr]     = useState<string | null>(null)
 
   function mName(uid: string | null) {
     if (!uid) return 'Unassigned'
     const m = brandMembers.find(m => m.user_id === uid)
     return m ? memberLabel(m) : 'Member'
+  }
+
+  async function createTask() {
+    if (!newTitle.trim()) { setCreateErr('Title is required.'); return }
+    setCreating(true); setCreateErr(null)
+    const { data, error } = await supabase.from('brand_tasks').insert({
+      brand_id:    brandId,
+      title:       newTitle.trim(),
+      description: newDesc.trim() || null,
+      department:  newDept,
+      priority:    newPriority,
+      assigned_to: newAssigned || userId,
+      created_by:  userId,
+      due_date:    newDueDate || null,
+      status:      'todo',
+    }).select('id, title, status, assigned_to, created_by, due_date, department, priority, description, created_at').single()
+    if (error) { setCreateErr('Failed: ' + error.message); setCreating(false); return }
+    if (data) setTasks(prev => [data as BTask, ...prev])
+    setNewTitle(''); setNewDesc(''); setNewDept('internal'); setNewPriority('medium')
+    setNewAssigned(''); setNewDueDate(''); setShowCreate(false)
+    setCreating(false)
   }
 
   async function updateStatus(id: string, status: string) {
@@ -271,22 +302,29 @@ function TasksView({ tasks: init, brandMembers, brandId, userId, supabase }: {
   async function reassign(id: string, newUid: string) {
     await supabase.from('brand_tasks').update({ assigned_to: newUid }).eq('id', id)
     await supabase.from('task_messages').insert({ task_id: id, brand_id: brandId, sender_id: userId, content: `__reassigned__:${newUid}` })
-    setTasks(ts => ts.filter(t => t.id !== id))
+    setTasks(ts => ts.map(t => t.id === id ? { ...t, assigned_to: newUid } : t))
   }
 
   const visible = tasks
+    .filter(t => viewMode === 'all' || t.assigned_to === userId)
     .filter(t => filterDept === 'all' || t.department === filterDept)
     .filter(t => filterStatus === 'all' || t.status === filterStatus)
 
+  const myOpen  = tasks.filter(t => t.assigned_to === userId && t.status !== 'done').length
+  const allOpen = tasks.filter(t => t.status !== 'done').length
+
   const selS = { fontSize: 12, padding: '5px 10px', border: '0.5px solid #e5e7eb', borderRadius: 6, background: '#f9fafb', outline: 'none' } as const
+  const inpS = { width: '100%', fontSize: 13, padding: '7px 10px', border: '0.5px solid #e5e7eb', borderRadius: 6, background: '#f9fafb', outline: 'none', fontFamily: 'inherit' } as const
+  const lbl  = (t: string) => <label style={{ fontSize: 11, color: '#6b7280', fontWeight: 600, display: 'block', marginBottom: 4 }}>{t}</label>
 
   return (
     <div className="bd-body">
-      <div className="bd-stat-row" style={{ gridTemplateColumns: 'repeat(3,1fr)' }}>
+      <div className="bd-stat-row">
         {[
-          { label: 'Total assigned',  val: tasks.length,                               cls: 'b-gray' },
-          { label: 'Open',            val: tasks.filter(t => t.status !== 'done').length, cls: 'b-warn' },
-          { label: 'Completed',       val: tasks.filter(t => t.status === 'done').length, cls: 'b-ok'   },
+          { label: 'My open tasks',  val: myOpen },
+          { label: 'All open tasks', val: allOpen },
+          { label: 'Done',           val: tasks.filter(t => t.status === 'done').length },
+          { label: 'Total',          val: tasks.length },
         ].map(s => (
           <div key={s.label} className="bd-stat">
             <div className="bd-stat-val">{s.val}</div>
@@ -295,8 +333,81 @@ function TasksView({ tasks: init, brandMembers, brandId, userId, supabase }: {
         ))}
       </div>
 
+      {/* ── Create Task ── */}
+      <div className="bd-card">
+        <div className="bd-card-hd">
+          <span className="bd-card-title">Create Task</span>
+          <button onClick={() => { setShowCreate(v => !v); setCreateErr(null) }}
+            style={{ fontSize: 12, padding: '5px 14px', background: showCreate ? '#f3f4f6' : '#185FA5', color: showCreate ? '#6b7280' : 'white', border: 'none', borderRadius: 6, cursor: 'pointer', fontWeight: 600 }}>
+            {showCreate ? 'Cancel' : '+ New Task'}
+          </button>
+        </div>
+        {showCreate && (
+          <div style={{ borderTop: '0.5px solid #e5e7eb', paddingTop: 14, display: 'flex', flexDirection: 'column', gap: 12 }}>
+            {createErr && <div style={{ background: '#FCEBEB', color: '#A32D2D', padding: '8px 12px', borderRadius: 6, fontSize: 12 }}>{createErr}</div>}
+            <div>
+              {lbl('Task Title *')}
+              <input value={newTitle} onChange={e => setNewTitle(e.target.value)}
+                placeholder="e.g. Review influencer contract for summer camp"
+                style={inpS} onKeyDown={e => { if (e.key === 'Enter') createTask() }} />
+            </div>
+            <div>
+              {lbl('Description')}
+              <textarea value={newDesc} onChange={e => setNewDesc(e.target.value)}
+                placeholder="Optional details, instructions or notes…" rows={2}
+                style={{ ...inpS, resize: 'vertical' }} />
+            </div>
+            <div className="bd-three-col">
+              <div>
+                {lbl('Assign To')}
+                <select value={newAssigned} onChange={e => setNewAssigned(e.target.value)} style={inpS}>
+                  <option value="">Myself</option>
+                  {brandMembers.filter(m => m.user_id !== userId).map(m => (
+                    <option key={m.user_id} value={m.user_id}>{memberLabel(m)}</option>
+                  ))}
+                </select>
+              </div>
+              <div>
+                {lbl('Department')}
+                <select value={newDept} onChange={e => setNewDept(e.target.value)} style={inpS}>
+                  {Object.entries(DEPT_BADGE).map(([k, v]) => <option key={k} value={k}>{v.label}</option>)}
+                </select>
+              </div>
+              <div>
+                {lbl('Priority')}
+                <select value={newPriority} onChange={e => setNewPriority(e.target.value)} style={inpS}>
+                  <option value="low">Low</option>
+                  <option value="medium">Medium</option>
+                  <option value="high">High</option>
+                  <option value="urgent">Urgent</option>
+                </select>
+              </div>
+            </div>
+            <div style={{ maxWidth: 240 }}>
+              {lbl('Due Date')}
+              <input type="date" value={newDueDate} onChange={e => setNewDueDate(e.target.value)} style={inpS} />
+            </div>
+            <div style={{ display: 'flex', justifyContent: 'flex-end' }}>
+              <button onClick={createTask} disabled={creating || !newTitle.trim()}
+                style={{ padding: '8px 22px', background: '#185FA5', color: 'white', border: 'none', borderRadius: 6, cursor: 'pointer', fontSize: 13, fontWeight: 600, opacity: !newTitle.trim() ? 0.5 : 1 }}>
+                {creating ? 'Creating…' : 'Create Task'}
+              </button>
+            </div>
+          </div>
+        )}
+      </div>
+
+      {/* ── Task list ── */}
       <div className="bd-card">
         <div style={{ display: 'flex', gap: 8, marginBottom: 14, flexWrap: 'wrap', alignItems: 'center' }}>
+          <div style={{ display: 'flex', background: '#f3f4f6', borderRadius: 6, padding: 2, gap: 2 }}>
+            {(['mine', 'all'] as const).map(m => (
+              <button key={m} onClick={() => setViewMode(m)}
+                style={{ fontSize: 12, padding: '4px 12px', borderRadius: 5, border: 'none', cursor: 'pointer', fontWeight: viewMode === m ? 600 : 400, background: viewMode === m ? '#fff' : 'transparent', color: viewMode === m ? '#111827' : '#6b7280', boxShadow: viewMode === m ? '0 0 0 0.5px #e5e7eb' : 'none' }}>
+                {m === 'mine' ? `My Tasks (${myOpen} open)` : `All Tasks (${allOpen} open)`}
+              </button>
+            ))}
+          </div>
           <select value={filterDept} onChange={e => setFDept(e.target.value)} style={selS}>
             <option value="all">All departments</option>
             {Object.entries(DEPT_BADGE).map(([k, v]) => <option key={k} value={k}>{v.label}</option>)}
@@ -311,15 +422,16 @@ function TasksView({ tasks: init, brandMembers, brandId, userId, supabase }: {
         {visible.length === 0 ? (
           <div style={{ textAlign: 'center', color: '#9ca3af', padding: '40px 0', fontSize: 13 }}>
             <div style={{ fontSize: 30, marginBottom: 8 }}>📭</div>
-            {tasks.length === 0 ? 'No tasks assigned to you yet.' : 'No tasks match this filter.'}
+            {tasks.length === 0 ? 'No tasks yet — create one above!' : 'No tasks match this filter.'}
           </div>
         ) : (
           <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
             {visible.map(t => {
-              const cfg    = TASK_STATUS_CFG[t.status ?? 'todo'] ?? TASK_STATUS_CFG.todo
-              const db     = DEPT_BADGE[t.department ?? 'other'] ?? DEPT_BADGE.other
-              const isOver = t.due_date && t.status !== 'done' && new Date(t.due_date) < new Date()
+              const cfg      = TASK_STATUS_CFG[t.status ?? 'todo'] ?? TASK_STATUS_CFG.todo
+              const db       = DEPT_BADGE[t.department ?? 'other'] ?? DEPT_BADGE.other
+              const isOver   = t.due_date && t.status !== 'done' && new Date(t.due_date) < new Date()
               const chatOpen = openChat === t.id
+              const isMine   = t.assigned_to === userId
 
               return (
                 <div key={t.id} style={{
@@ -327,10 +439,7 @@ function TasksView({ tasks: init, brandMembers, brandId, userId, supabase }: {
                   background: '#fff', opacity: t.status === 'done' ? 0.65 : 1,
                 }}>
                   <div style={{ display: 'flex', alignItems: 'flex-start', gap: 10, padding: '10px 14px', flexWrap: 'wrap' }}>
-                    {/* Dept badge */}
                     <span style={{ fontSize: 10, fontWeight: 700, padding: '2px 8px', borderRadius: 10, background: db.bg, color: db.color, marginTop: 2, flexShrink: 0 }}>{db.label}</span>
-
-                    {/* Title + meta */}
                     <div style={{ flex: 1, minWidth: 160 }}>
                       <div style={{ fontSize: 12.5, fontWeight: 600, color: t.status === 'done' ? '#9ca3af' : '#111827', textDecoration: t.status === 'done' ? 'line-through' : 'none' }}>
                         {t.title}
@@ -339,35 +448,28 @@ function TasksView({ tasks: init, brandMembers, brandId, userId, supabase }: {
                       <div style={{ display: 'flex', gap: 6, marginTop: 4, flexWrap: 'wrap', alignItems: 'center' }}>
                         {t.priority && <span style={{ fontSize: 11, fontWeight: 700, color: PRIORITY_COLORS[t.priority] ?? '#6b7280', textTransform: 'capitalize' }}>{t.priority}</span>}
                         {t.due_date && <span style={{ fontSize: 10, color: isOver ? '#dc2626' : '#9ca3af', fontWeight: isOver ? 700 : 400 }}>Due {fmtDate(t.due_date)}{isOver ? ' ⚠' : ''}</span>}
-                        <span style={{ fontSize: 10, color: '#9ca3af' }}>From: <strong style={{ color: '#374151' }}>{mName(t.created_by)}</strong></span>
+                        <span style={{ fontSize: 10, color: '#9ca3af' }}>→ <strong style={{ color: isMine ? '#185FA5' : '#374151' }}>{isMine ? 'Me' : mName(t.assigned_to)}</strong></span>
+                        {t.created_by && <span style={{ fontSize: 10, color: '#9ca3af' }}>by <strong style={{ color: '#374151' }}>{t.created_by === userId ? 'Me' : mName(t.created_by)}</strong></span>}
                       </div>
                     </div>
-
-                    {/* Controls */}
                     <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', alignItems: 'center', flexShrink: 0 }}>
-                      {/* Status toggle */}
                       <button onClick={() => updateStatus(t.id, cfg.next)} className={`badge ${cfg.cls}`}
                         style={{ cursor: 'pointer', border: 'none', outline: 'none' }} title={`Click → ${TASK_STATUS_CFG[cfg.next]?.label}`}>
                         {cfg.label}
                       </button>
-
-                      {/* Reassign */}
                       <select defaultValue="" onChange={async e => { if (e.target.value) await reassign(t.id, e.target.value) }}
-                        style={{ fontSize: 11, padding: '2px 6px', border: '0.5px solid #e5e7eb', borderRadius: 5, background: '#f9fafb', cursor: 'pointer', maxWidth: 110 }}>
+                        style={{ fontSize: 11, padding: '2px 6px', border: '0.5px solid #e5e7eb', borderRadius: 5, background: '#f9fafb', cursor: 'pointer', maxWidth: 120 }}>
                         <option value="">Reassign…</option>
-                        {brandMembers.filter(m => m.user_id !== userId).map(m => (
-                          <option key={m.user_id} value={m.user_id}>{memberLabel(m)}</option>
+                        {brandMembers.map(m => (
+                          <option key={m.user_id} value={m.user_id}>{memberLabel(m)}{m.user_id === userId ? ' (me)' : ''}</option>
                         ))}
                       </select>
-
-                      {/* Chat toggle */}
                       <button onClick={() => setOpenChat(v => v === t.id ? null : t.id)}
                         style={{ display: 'flex', alignItems: 'center', gap: 4, fontSize: 11, padding: '3px 9px', background: chatOpen ? '#E6F1FB' : '#f9fafb', color: chatOpen ? '#185FA5' : '#6b7280', border: `0.5px solid ${chatOpen ? '#185FA5' : '#e5e7eb'}`, borderRadius: 5, cursor: 'pointer', fontWeight: 600 }}>
                         <i className="ti ti-message" style={{ fontSize: 12 }} /> Chat
                       </button>
                     </div>
                   </div>
-
                   {chatOpen && (
                     <div style={{ padding: '0 14px 12px' }}>
                       <TaskChatPanel task={t} brandId={brandId} userId={userId} supabase={supabase} members={brandMembers} />
@@ -702,6 +804,7 @@ function ContentView({ initialSubmissions, deals, brandId, userId, supabase }: {
   const [fChannelName, setFChannelName] = useState('')
   const [fPrice,       setFPrice]       = useState('')
   const [fType,        setFType]        = useState('video')
+  const [fNotes,       setFNotes]       = useState('')
 
   async function submit() {
     if (!fLink.trim()) { setError('Please enter a content link.'); return }
@@ -722,7 +825,7 @@ function ContentView({ initialSubmissions, deals, brandId, userId, supabase }: {
     if (err) { setError('Failed: ' + err.message); setSubmitting(false); return }
     if (data) setSubmissions(prev => [data as ContentSubmission, ...prev])
 
-    setFDeal(''); setFLink(''); setFChannelName(''); setFPrice(''); setFType('video')
+    setFDeal(''); setFLink(''); setFChannelName(''); setFPrice(''); setFType('video'); setFNotes('')
     setShowForm(false); setSubmitting(false)
   }
 
@@ -800,6 +903,14 @@ function ContentView({ initialSubmissions, deals, brandId, userId, supabase }: {
                   placeholder="e.g. 25000"
                   style={inpS} min={0} step={100} />
               </div>
+            </div>
+
+            {/* Notes */}
+            <div>
+              {lbl('Notes (optional)')}
+              <textarea value={fNotes} onChange={e => setFNotes(e.target.value)}
+                placeholder="Any notes for the reviewer, e.g. views count, posting date, special conditions…"
+                rows={2} style={{ ...inpS, resize: 'vertical' }} />
             </div>
 
             <div style={{ display: 'flex', justifyContent: 'flex-end' }}>
@@ -909,6 +1020,116 @@ function TeamView({ brandMembers, tasks }: { brandMembers: BrandMember[]; tasks:
   )
 }
 
+// ─── HistoryView ─────────────────────────────────────────────────────────────
+function HistoryView({ brandId, userId, brandMembers, supabase }: {
+  brandId: string; userId: string; brandMembers: BrandMember[]
+  supabase: ReturnType<typeof createClient>
+}) {
+  type HEvent = { id: string; type: 'task' | 'content'; content: string; sender_id: string; created_at: string; meta?: string }
+  const [events, setEvents]   = useState<HEvent[]>([])
+  const [loading, setLoading] = useState(true)
+
+  function mName(uid: string) {
+    const m = brandMembers.find(m => m.user_id === uid)
+    return m ? memberLabel(m) : 'Member'
+  }
+
+  useEffect(() => {
+    async function load() {
+      setLoading(true)
+      const [{ data: taskMsgs }, { data: contentSubs }] = await Promise.all([
+        supabase.from('task_messages')
+          .select('id, task_id, sender_id, content, created_at, brand_tasks(title)')
+          .eq('brand_id', brandId).order('created_at', { ascending: false }).limit(50),
+        supabase.from('content_submissions')
+          .select('id, submitted_by, file_url, content_type, status, submitted_at, channel_name')
+          .eq('brand_id', brandId).order('submitted_at', { ascending: false }).limit(30),
+      ])
+      const ev1: HEvent[] = (taskMsgs ?? []).map((m: any) => ({
+        id: 'tm-' + m.id, type: 'task',
+        content: m.content, sender_id: m.sender_id,
+        created_at: m.created_at,
+        meta: (m.brand_tasks as any)?.title ?? 'Task',
+      }))
+      const ev2: HEvent[] = (contentSubs ?? []).map((s: any) => ({
+        id: 'cs-' + s.id, type: 'content',
+        content: `Submitted ${s.content_type ?? 'content'}${s.channel_name ? ': ' + s.channel_name : ''}`,
+        sender_id: s.submitted_by,
+        created_at: s.submitted_at ?? '',
+        meta: s.status ?? 'pending',
+      }))
+      const all = [...ev1, ...ev2]
+        .filter(e => e.created_at)
+        .sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())
+        .slice(0, 60)
+      setEvents(all)
+      setLoading(false)
+    }
+    load()
+  }, [brandId])
+
+  function renderEvent(ev: HEvent) {
+    const isStatus   = ev.type === 'task' && ev.content.startsWith('__status__:')
+    const isReassign = ev.type === 'task' && ev.content.startsWith('__reassigned__:')
+    const isMine     = ev.sender_id === userId
+
+    let icon = 'ti-message-2', iconColor = '#185FA5', bgColor = '#E6F1FB', text = ev.content
+
+    if (ev.type === 'content') {
+      icon = 'ti-video'; iconColor = '#3B6D11'; bgColor = '#EAF3DE'
+    } else if (isStatus) {
+      const s = ev.content.split(':')[1]
+      icon = 'ti-checkbox'; iconColor = '#854D0E'; bgColor = '#FAEEDA'
+      text = `Changed status → "${TASK_STATUS_CFG[s]?.label ?? s}"`
+    } else if (isReassign) {
+      icon = 'ti-user-check'; iconColor = '#5B21B6'; bgColor = '#EDE9FE'
+      const uid = ev.content.split(':')[1]
+      text = `Reassigned to ${uid === userId ? 'me' : mName(uid)}`
+    }
+
+    return (
+      <div key={ev.id} style={{ display: 'flex', gap: 10, padding: '10px 0', borderBottom: '0.5px solid #f3f4f6' }}>
+        <div style={{ width: 30, height: 30, borderRadius: '50%', background: bgColor, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, marginTop: 2 }}>
+          <i className={`ti ${icon}`} style={{ fontSize: 13, color: iconColor }} />
+        </div>
+        <div style={{ flex: 1, minWidth: 0 }}>
+          <div style={{ display: 'flex', gap: 5, alignItems: 'baseline', flexWrap: 'wrap' }}>
+            <span style={{ fontSize: 12, fontWeight: 600, color: isMine ? '#185FA5' : '#111827' }}>{isMine ? 'You' : mName(ev.sender_id)}</span>
+            <span style={{ fontSize: 12, color: '#374151' }}>{text}</span>
+          </div>
+          {ev.meta && ev.type === 'task' && !isStatus && !isReassign && (
+            <div style={{ fontSize: 10, color: '#9ca3af', marginTop: 1 }}>in task: <strong style={{ color: '#6b7280' }}>{ev.meta}</strong></div>
+          )}
+          {ev.meta && ev.type === 'task' && (isStatus || isReassign) && (
+            <div style={{ fontSize: 10, color: '#9ca3af', marginTop: 1 }}>task: <strong style={{ color: '#6b7280' }}>{ev.meta}</strong></div>
+          )}
+          <div style={{ fontSize: 10, color: '#9ca3af', marginTop: 2 }}>{fmtDate(ev.created_at)} · {fmtTime(ev.created_at)}</div>
+        </div>
+      </div>
+    )
+  }
+
+  return (
+    <div className="bd-body">
+      <div className="bd-card">
+        <div className="bd-card-hd">
+          <span className="bd-card-title">Activity History</span>
+          <span style={{ fontSize: 11, color: '#9ca3af' }}>Latest 60 events · tasks + content</span>
+        </div>
+        {loading ? (
+          <div style={{ textAlign: 'center', color: '#9ca3af', padding: '40px 0', fontSize: 13 }}>Loading…</div>
+        ) : events.length === 0 ? (
+          <div style={{ textAlign: 'center', color: '#9ca3af', padding: '40px 0', fontSize: 13 }}>
+            <div style={{ fontSize: 30, marginBottom: 8 }}>📜</div>No activity yet.
+          </div>
+        ) : (
+          <div>{events.map(renderEvent)}</div>
+        )}
+      </div>
+    </div>
+  )
+}
+
 // ─── Main Component ───────────────────────────────────────────────────────────
 export default function MemberDashboard({
   user, profile, membership, deals, applications, tasks, brandMembers,
@@ -932,7 +1153,7 @@ export default function MemberDashboard({
   const brandId     = membership?.brand_id ?? ''
   const displayName = profile.displayName ?? user.email
   const initials    = initFrom(displayName)
-  const myOpenTasks = tasks.filter(t => t.status !== 'done')
+  const myOpenTasks = tasks.filter(t => t.assigned_to === user.id && t.status !== 'done')
 
   async function signOut() { await supabase.auth.signOut(); router.push('/') }
 
@@ -946,12 +1167,13 @@ export default function MemberDashboard({
     { icon: 'ti-message-dots',     label: 'Messages',     tab: 'messages', badge: conversations.length || undefined },
     { icon: 'ti-video',            label: 'Content',      tab: 'content' },
     { icon: 'ti-users',            label: 'Team',         tab: 'team' },
+    { icon: 'ti-history',          label: 'Activity',     tab: 'history' },
     { icon: 'ti-user',             label: 'Profile',      tab: 'profile' },
   ]
 
   const SECTIONS = [
-    { title: 'Work',    items: NAV.slice(0, 7) },
-    { title: 'Account', items: NAV.slice(7) },
+    { title: 'Work',    items: NAV.slice(0, 9) },
+    { title: 'Account', items: NAV.slice(9) },
   ]
 
   return (
@@ -1080,6 +1302,7 @@ export default function MemberDashboard({
           {tab === 'messages' && <MessagesView conversations={conversations} userId={user.id} supabase={supabase} />}
           {tab === 'content'  && <ContentView initialSubmissions={contentSubmissions} deals={deals} brandId={brandId} userId={user.id} supabase={supabase} />}
           {tab === 'team'     && <TeamView brandMembers={brandMembers} tasks={tasks} />}
+          {tab === 'history'  && <HistoryView brandId={brandId} userId={user.id} brandMembers={brandMembers} supabase={supabase} />}
 
           {tab === 'profile' && (
             <div className="bd-body">

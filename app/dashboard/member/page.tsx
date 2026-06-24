@@ -47,13 +47,12 @@ export default async function MemberPage() {
         .limit(50)
     : { data: [] }
 
-  // Only tasks assigned to this member
+  // All brand tasks (members can create + see all, filter to "mine" in UI)
   const { data: tasks } = brandId
     ? await supabase
         .from('brand_tasks')
         .select('id, title, status, assigned_to, created_by, due_date, department, priority, description, created_at')
         .eq('brand_id', brandId)
-        .eq('assigned_to', user.id)
         .order('created_at', { ascending: false })
         .limit(200)
     : { data: [] }
