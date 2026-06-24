@@ -355,6 +355,24 @@ function MessagesTab({ conversations, userId, creatorId }: { conversations: Conv
   const [sending,   setSending]   = useState(false)
   const bottomRef = useRef<HTMLDivElement>(null)
 
+  // On mount: fetch fresh conversations so any brand-initiated chats since page load appear
+  useEffect(() => {
+    if (!creatorId) return
+    supabase
+      .from('conversations')
+      .select('id, brand_id, creator_id, last_msg_at, created_at, brands(id, name, logo_url, owner_id)')
+      .eq('creator_id', creatorId)
+      .order('last_msg_at', { ascending: false, nullsFirst: false })
+      .limit(30)
+      .then(({ data }) => {
+        if (data && data.length > 0) {
+          setLiveConvs(data as unknown as Conversation[])
+          setSelected(data[0] as unknown as Conversation)
+          loadMessages(data[0] as unknown as Conversation)
+        }
+      })
+  }, [creatorId])
+
   // Auto-scroll on new messages
   useEffect(() => { bottomRef.current?.scrollIntoView({ behavior: 'smooth' }) }, [messages])
 

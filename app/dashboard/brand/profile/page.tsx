@@ -73,13 +73,14 @@ export default async function BrandProfilePage() {
     )
   }
 
-  // ── 2b. Fetch all brand data in parallel (admin client — bypasses RLS) ───────
+  // ── 2b. Fetch all brand data in one parallel batch ────────────────────────
   const [
     { data: campaigns },
     { data: conversations },
     { data: deals },
     { data: teamMembersRaw },
     { count: unreadNotifs },
+    { data: applications },
   ] = await Promise.all([
     admin
       .from('campaigns')
@@ -109,19 +110,17 @@ export default async function BrandProfilePage() {
       .select('*', { count: 'exact', head: true })
       .eq('user_id', user.id)
       .eq('is_read', false),
+    // Applications filtered via campaigns join — no longer depends on campaignIds
+    admin
+      .from('campaign_applications')
+      .select('id, bid_amount, status, message, created_at, campaign_id, creator_id, assigned_to, campaigns!inner(id, title, platforms, brand_id), creators(id, full_name, username, platform, price_per_post, user_id)')
+      .eq('campaigns.brand_id', brand.id)
+      .order('created_at', { ascending: false })
+      .limit(200),
   ])
 
-  // ── 3. Applications depend on campaign IDs — run after step 2 ─────────────
-  const campaignIds = (campaigns ?? []).map((c: any) => c.id)
-  const [{ data: applications }, { data: memberProfiles }] = await Promise.all([
-    campaignIds.length > 0
-      ? admin
-          .from('campaign_applications')
-          .select('id, bid_amount, status, message, created_at, campaign_id, creator_id, assigned_to, campaigns(id, title, platforms), creators(id, full_name, username, platform, price_per_post, user_id)')
-          .in('campaign_id', campaignIds)
-          .order('created_at', { ascending: false })
-          .limit(50)
-      : Promise.resolve({ data: [] }),
+  // ── 3. Member profiles (needs teamMembersRaw) ──────────────────────────────
+  const [{ data: memberProfiles }] = await Promise.all([
     (teamMembersRaw ?? []).length > 0
       ? admin
           .from('profiles')

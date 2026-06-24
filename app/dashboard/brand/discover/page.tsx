@@ -59,7 +59,7 @@ export default async function BrandDiscoverPage() {
   const { data: initialCreators, count } = await supabase
     .from('creators')
     .select(
-      'id,username,full_name,picture_url,platform,is_verified,account_category,followers,subscribers,engagement_rate,avg_likes,views,reels_plays,geo_country,price_per_post',
+      'id,username,full_name,picture_url,platform,is_verified,account_category,followers,subscribers,engagement_rate,avg_likes,views,reels_plays,geo_country,price_per_post,user_id',
       { count: 'planned' }
     )
     .order('followers', { ascending: false, nullsFirst: false })

@@ -15,13 +15,16 @@ export async function GET(req: NextRequest) {
   const platforms = sp.get('platforms')?.split(',').filter(Boolean) ?? []
   const categories = sp.get('categories')?.split('||').filter(Boolean) ?? []
   const countries  = sp.get('countries')?.split(',').filter(Boolean) ?? []
+  const registeredOnly = sp.get('registeredOnly') === '1'
 
   let q = supabase
     .from('creators')
     .select(
-      'id,username,full_name,picture_url,platform,is_verified,account_category,followers,subscribers,engagement_rate,avg_likes,views,reels_plays,geo_country,geo_city,profile_url,description,price_per_post',
+      'id,username,full_name,picture_url,platform,is_verified,account_category,followers,subscribers,engagement_rate,avg_likes,views,reels_plays,geo_country,geo_city,profile_url,description,price_per_post,user_id',
       { count: 'exact' }
     )
+
+  if (registeredOnly) q = q.not('user_id', 'is', null)
 
   if (platforms.length > 0)  q = q.in('platform', platforms)
   if (minF > 0 && maxF > 0)  q = q.or(`and(followers.gte.${minF},followers.lte.${maxF}),and(subscribers.gte.${minF},subscribers.lte.${maxF})`)

@@ -30,6 +30,7 @@ interface Creator {
   profile_url: string | null
   description: string | null
   price_per_post: number | null
+  user_id: string | null
 }
 
 interface Filters {
@@ -245,6 +246,8 @@ export default function CreatorDiscovery({
   const [pCountries,  setPCountries]  = useState<Set<string>>(new Set())
   const [countrySearch, setCountrySearch] = useState('')
 
+  const [registeredOnly, setRegisteredOnly] = useState(false)
+
   // Applied filters
   const [filters, setFilters] = useState<Filters>({
     platforms: new Set(), minF: 0, maxF: 0, minE: 0, categories: new Set(), countries: new Set(),
@@ -269,6 +272,7 @@ export default function CreatorDiscovery({
       if (f.platforms.size)   params.set('platforms',  [...f.platforms].join(','))
       if (f.categories.size)  params.set('categories', [...f.categories].join('||'))
       if (f.countries.size)   params.set('countries',  [...f.countries].join(','))
+      if (registeredOnly)     params.set('registeredOnly', '1')
 
       const res  = await fetch(`/api/creators?${params}`, { signal: abortRef.current.signal })
       const json = await res.json()
@@ -283,7 +287,7 @@ export default function CreatorDiscovery({
       if (e?.name !== 'AbortError') console.error(e)
     }
     setLoading(false)
-  }, [])
+  }, [registeredOnly])
 
   // Single consolidated effect — watch everything
   useEffect(() => {
@@ -323,7 +327,7 @@ export default function CreatorDiscovery({
   const pgStart     = Math.max(0, page - 2)
   const pgEnd       = Math.min(totalPages - 1, pgStart + 4)
   const activeFilters = filters.platforms.size + filters.categories.size + filters.countries.size
-    + (filters.minF > 0 ? 1 : 0) + (filters.minE > 0 ? 1 : 0)
+    + (filters.minF > 0 ? 1 : 0) + (filters.minE > 0 ? 1 : 0) + (registeredOnly ? 1 : 0)
 
   const filteredCats     = categories.filter(c => c.toLowerCase().includes(catSearch.toLowerCase()))
   const filteredCountries = countries.filter(c => c.name.toLowerCase().includes(countrySearch.toLowerCase()))
@@ -341,6 +345,18 @@ export default function CreatorDiscovery({
             <button onClick={resetFilters} style={{ background: 'none', border: 'none', color: '#7c3aed', cursor: 'pointer', fontSize: 11, textDecoration: 'underline' }}>Clear all</button>
           </div>
         )}
+
+        {/* Registered on ADMIS toggle */}
+        <label onClick={() => { setRegisteredOnly(r => !r); setPage(0) }}
+          style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', cursor: 'pointer', background: registeredOnly ? '#ede9fe' : T.elev, border: `1px solid ${registeredOnly ? '#c4b5fd' : T.border}`, borderRadius: 8, padding: '9px 12px' }}>
+          <div>
+            <div style={{ fontSize: 13, fontWeight: 600, color: registeredOnly ? '#5710fc' : T.text }}>Registered on ADMIS</div>
+            <div style={{ fontSize: 11, color: T.dim, marginTop: 1 }}>Only show creators who signed up</div>
+          </div>
+          <div style={{ width: 36, height: 20, borderRadius: 20, background: registeredOnly ? '#5710fc' : '#d1d5db', position: 'relative', flexShrink: 0, transition: 'background .15s' }}>
+            <div style={{ width: 16, height: 16, borderRadius: '50%', background: '#fff', position: 'absolute', top: 2, left: registeredOnly ? 18 : 2, transition: 'left .15s' }} />
+          </div>
+        </label>
 
         {/* Platform */}
         <div>
@@ -649,7 +665,7 @@ function ContactSheet({ creators, onBid, onContact }: { creators: Creator[]; onB
                       <div>
                         <div style={{ fontWeight: 700, fontSize: 13, color: T.text }}>
                           {c.full_name || c.username || '—'}
-                          {c.is_verified && <span style={{ marginLeft: 5, fontSize: 10, background: '#ede9fe', color: '#7c3aed', padding: '1px 5px', borderRadius: 8 }}>✓</span>}
+                          {c.is_verified && <span style={{ marginLeft: 5, fontSize: 10, background: '#ede9fe', color: '#7c3aed', padding: '1px 5px', borderRadius: 8 }}>✓</span>}{c.user_id && <span style={{ marginLeft: 4, fontSize: 10, background: '#dcfce7', color: '#16a34a', padding: '1px 5px', borderRadius: 8, fontWeight: 700 }}>ADMIS</span>}
                         </div>
                         <div style={{ fontSize: 11, color: T.faint }}>@{c.username}</div>
                       </div>
@@ -768,7 +784,7 @@ function CreatorCard({ creator: c, layout, onContact, onBid, isAdmin = false, on
         <div style={{ flex: '0 0 170px', minWidth: 0 }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
             <span style={{ fontWeight: 700, fontSize: 13, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{name}</span>
-            {c.is_verified && <span style={{ fontSize: 9, background: '#ede9fe', color: '#7c3aed', padding: '1px 5px', borderRadius: 8 }}>✓</span>}
+            {c.is_verified && <span style={{ fontSize: 9, background: '#ede9fe', color: '#7c3aed', padding: '1px 5px', borderRadius: 8 }}>✓</span>}{c.user_id && <span style={{ marginLeft: 3, fontSize: 9, background: '#dcfce7', color: '#16a34a', padding: '1px 5px', borderRadius: 8, fontWeight: 700 }}>ADMIS</span>}
           </div>
           <div style={{ color: T.faint, fontSize: 11 }}>{handle}</div>
         </div>
@@ -808,7 +824,7 @@ function CreatorCard({ creator: c, layout, onContact, onBid, isAdmin = false, on
           <div style={{ flex: 1, minWidth: 0 }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: 5, marginBottom: 2 }}>
               <span style={{ fontWeight: 700, fontSize: 13, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{name}</span>
-              {c.is_verified && <span style={{ fontSize: 9, background: '#ede9fe', color: '#7c3aed', padding: '1px 5px', borderRadius: 8 }}>✓</span>}
+              {c.is_verified && <span style={{ fontSize: 9, background: '#ede9fe', color: '#7c3aed', padding: '1px 5px', borderRadius: 8 }}>✓</span>}{c.user_id && <span style={{ marginLeft: 3, fontSize: 9, background: '#dcfce7', color: '#16a34a', padding: '1px 5px', borderRadius: 8, fontWeight: 700 }}>ADMIS</span>}
             </div>
             <div style={{ color: T.faint, fontSize: 11, marginBottom: 5 }}>{handle}</div>
             <div style={{ display: 'flex', alignItems: 'center', gap: 4, flexWrap: 'wrap' }}>
