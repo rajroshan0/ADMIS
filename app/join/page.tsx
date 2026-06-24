@@ -1,5 +1,6 @@
 'use client'
 
+import { Suspense } from 'react'
 import { useState, useEffect } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
@@ -24,15 +25,15 @@ function errMsg(e: unknown): string {
   return String(e)
 }
 
-export default function JoinPage() {
+function JoinForm() {
   const router       = useRouter()
   const searchParams = useSearchParams()
   const token        = searchParams.get('token')
   const supabase     = createClient()
 
   const [invite,     setInvite]     = useState<InviteInfo | null>(null)
-  const [pageError,  setPageError]  = useState<string | null>(null)  // invalid token / expired
-  const [formError,  setFormError]  = useState<string | null>(null)  // submit errors
+  const [pageError,  setPageError]  = useState<string | null>(null)
+  const [formError,  setFormError]  = useState<string | null>(null)
   const [loading,    setLoading]    = useState(true)
   const [name,       setName]       = useState('')
   const [password,   setPassword]   = useState('')
@@ -62,7 +63,6 @@ export default function JoinPage() {
     if (!name.trim() || !password || !token || !invite) return
     setSubmitting(true); setFormError(null)
 
-    // Step 1: Sign up (or sign in if already registered)
     const { error: signUpErr } = await supabase.auth.signUp({
       email: invite.email,
       password,
@@ -72,7 +72,6 @@ export default function JoinPage() {
     if (signUpErr) {
       const msg = signUpErr.message ?? ''
       if (msg.toLowerCase().includes('already') || msg.toLowerCase().includes('registered')) {
-        // User exists — sign them in instead
         const { error: signInErr } = await supabase.auth.signInWithPassword({ email: invite.email, password })
         if (signInErr) {
           setFormError('This email is already registered. If it\'s your account, enter the correct password.')
@@ -84,7 +83,6 @@ export default function JoinPage() {
       }
     }
 
-    // Step 2: Call SECURITY DEFINER RPC — links account to brand, sets role=member
     const { data: rpcResult, error: rpcErr } = await supabase.rpc('accept_team_invite', {
       p_token: token,
       p_display_name: name.trim()
@@ -95,7 +93,6 @@ export default function JoinPage() {
       setSubmitting(false); return
     }
 
-    // rpcResult is the jsonb returned by the function
     const result = rpcResult as { success?: boolean; error?: string } | null
     if (result?.error) {
       setFormError(result.error)
@@ -124,7 +121,6 @@ export default function JoinPage() {
       background: 'linear-gradient(135deg, #EFF6FF 0%, #F5F3FF 100%)', fontFamily: 'Inter, sans-serif', padding: 20
     }}>
       <div style={{ width: '100%', maxWidth: 420 }}>
-        {/* Platform logo */}
         <div style={{ textAlign: 'center', marginBottom: 32 }}>
           <div style={{
             width: 48, height: 48, borderRadius: 12, background: 'linear-gradient(135deg, #2563eb, #7c3aed)',
@@ -142,7 +138,6 @@ export default function JoinPage() {
             </div>
           )}
 
-          {/* Page-level error (invalid/expired token) */}
           {!loading && pageError && (
             <div style={{ textAlign: 'center' }}>
               <div style={{ fontSize: 36, marginBottom: 12 }}>⚠️</div>
@@ -155,7 +150,6 @@ export default function JoinPage() {
             </div>
           )}
 
-          {/* Signup form */}
           {!loading && !pageError && invite && step === 'form' && (
             <>
               <div style={{ marginBottom: 24 }}>
@@ -194,7 +188,6 @@ export default function JoinPage() {
                     style={{ width: '100%', fontSize: 13, padding: '9px 12px', border: '0.5px solid #e5e7eb', borderRadius: 8, background: 'white', outline: 'none', fontFamily: 'inherit', boxSizing: 'border-box' }} />
                 </div>
 
-                {/* Form-level error — shows inline, doesn't replace the form */}
                 {formError && (
                   <div style={{ fontSize: 12, padding: '10px 12px', borderRadius: 8, background: '#FCEBEB', color: '#A32D2D', wordBreak: 'break-word' }}>
                     {formError}
@@ -226,5 +219,17 @@ export default function JoinPage() {
         </div>
       </div>
     </div>
+  )
+}
+
+export default function JoinPage() {
+  return (
+    <Suspense fallback={
+      <div style={{ minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'linear-gradient(135deg, #EFF6FF 0%, #F5F3FF 100%)' }}>
+        <div style={{ fontSize: 14, color: '#6b7280' }}>Loading…</div>
+      </div>
+    }>
+      <JoinForm />
+    </Suspense>
   )
 }
