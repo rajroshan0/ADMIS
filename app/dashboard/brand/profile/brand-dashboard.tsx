@@ -639,7 +639,7 @@ function ApplicationsView({ applications, conversations, deals, teamMembers, bra
   brandId: string
   onUpdate: (id: string, status: string, creatorUserId: string | null) => void
   onDealCreated: (deal: Deal) => void
-  onGoTab: (tab: string) => void
+  onGoTab: (tab: string, conv?: BrandConversation) => void
 }) {
   const supabase = createClient()
   const [filter,   setFilter]   = useState('all')
@@ -696,14 +696,16 @@ function ApplicationsView({ applications, conversations, deals, teamMembers, bra
     if (!brandId || !app.creator_id) return
     // Check if conversation already exists
     let { data: conv } = await supabase.from('conversations')
-      .select('id').eq('brand_id', brandId).eq('creator_id', app.creator_id).maybeSingle()
+      .select('id, brand_id, creator_id, last_msg_at, created_at, creators(id, full_name, username, user_id)')
+      .eq('brand_id', brandId).eq('creator_id', app.creator_id).maybeSingle()
     if (!conv) {
       const { data: newConv } = await supabase.from('conversations')
         .insert({ brand_id: brandId, creator_id: app.creator_id, application_id: app.id })
-        .select('id').single()
+        .select('id, brand_id, creator_id, last_msg_at, created_at, creators(id, full_name, username, user_id)')
+        .single()
       conv = newConv
     }
-    onGoTab('messages')
+    onGoTab('messages', conv as unknown as BrandConversation)
   }
 
   // Accept → negotiate → create deal
@@ -1291,26 +1293,92 @@ function PromoView({ brand }: { brand: Brand | null }) {
 }
 
 // Payments
-function PaymentsView({ applications, onUpdate }: { applications: Application[]; onUpdate: (id: string, status: string, creatorUserId: string | null) => void }) {
+interface PaymentRequest {
+  id: string; brand_id: string; creator_name: string; campaign_name: string
+  bid_amount: number; final_amount: number; tds_amount: number; net_payable: number
+  status: string; notes: string | null; created_at: string; paid_at: string | null
+}
+
+function PaymentsView({ applications, onUpdate, brandId, userId }: {
+  applications: Application[]
+  onUpdate: (id: string, status: string, creatorUserId: string | null) => void
+  brandId: string
+  userId: string
+}) {
   const supabase = createClient()
-  const [localApps, setLocalApps] = useState(applications)
-  const [amounts,   setAmounts]   = useState<Record<string, string>>({})
-  const [saving,    setSaving]    = useState<Record<string, boolean>>({})
-  const [msg,       setMsg]       = useState<Record<string, string>>({})
+  const [localApps,  setLocalApps]  = useState(applications)
+  const [amounts,    setAmounts]    = useState<Record<string, string>>({})
+  const [saving,     setSaving]     = useState<Record<string, boolean>>({})
+  const [msg,        setMsg]        = useState<Record<string, string>>({})
+  const [requests,   setRequests]   = useState<PaymentRequest[]>([])
+  const [showForm,   setShowForm]   = useState(false)
+  const [submitting, setSubmitting] = useState(false)
+  const [formErr,    setFormErr]    = useState('')
+
+  // Form state
+  const [fCreator,   setFCreator]   = useState('')
+  const [fCampaign,  setFCampaign]  = useState('')
+  const [fBid,       setFBid]       = useState('')
+  const [fFinal,     setFFinal]     = useState('')
+  const [fNotes,     setFNotes]     = useState('')
 
   useEffect(() => { setLocalApps(applications) }, [applications])
+  useEffect(() => { if (brandId) loadRequests() }, [brandId])
 
-  // Only show accepted or success deals
+  async function loadRequests() {
+    const { data } = await supabase.from('payment_requests')
+      .select('*').eq('brand_id', brandId).order('created_at', { ascending: false })
+    setRequests((data ?? []) as PaymentRequest[])
+  }
+
+  async function submitRequest(e: React.FormEvent) {
+    e.preventDefault()
+    setFormErr('')
+    if (!fCreator.trim())  { setFormErr('Creator name is required'); return }
+    if (!fCampaign.trim()) { setFormErr('Campaign name is required'); return }
+    const bid   = parseFloat(fBid)
+    const final = parseFloat(fFinal)
+    if (!bid   || bid   <= 0) { setFormErr('Enter a valid bid amount'); return }
+    if (!final || final <= 0) { setFormErr('Enter a valid final amount'); return }
+    setSubmitting(true)
+    const { data, error } = await supabase.from('payment_requests').insert({
+      brand_id:      brandId,
+      creator_name:  fCreator.trim(),
+      campaign_name: fCampaign.trim(),
+      bid_amount:    bid,
+      final_amount:  final,
+      notes:         fNotes.trim() || null,
+      created_by:    userId,
+    }).select('*').single()
+    setSubmitting(false)
+    if (error) { setFormErr(error.message); return }
+    setRequests(prev => [data as PaymentRequest, ...prev])
+    setFCreator(''); setFCampaign(''); setFBid(''); setFFinal(''); setFNotes('')
+    setShowForm(false)
+  }
+
+  async function markRequestPaid(req: PaymentRequest) {
+    setSaving(s => ({ ...s, [req.id]: true }))
+    await supabase.from('payment_requests').update({ status: 'paid', paid_at: new Date().toISOString() }).eq('id', req.id)
+    setRequests(prev => prev.map(r => r.id === req.id ? { ...r, status: 'paid', paid_at: new Date().toISOString() } : r))
+    setSaving(s => ({ ...s, [req.id]: false }))
+    setMsg(m => ({ ...m, [req.id]: '✓ Marked as paid!' }))
+    setTimeout(() => setMsg(m => ({ ...m, [req.id]: '' })), 2500)
+  }
+
+  async function deleteRequest(id: string) {
+    await supabase.from('payment_requests').delete().eq('id', id)
+    setRequests(prev => prev.filter(r => r.id !== id))
+  }
+
+  // Only show accepted or success deals from applications
   const payApps = localApps.filter(a => a.status === 'accepted' || a.status === 'success')
-  const paidTotal   = localApps.filter(a => a.status === 'success').reduce((s, a) => s + (a.bid_amount ?? 0), 0)
-  const pendingTotal = localApps.filter(a => a.status === 'accepted').reduce((s, a) => s + (a.bid_amount ?? 0), 0)
 
   async function markPaid(app: Application) {
     const rawAmt = amounts[app.id]
     const amt = rawAmt ? parseFloat(rawAmt) : (app.bid_amount ?? 0)
     if (!amt || amt <= 0) { setMsg(m => ({ ...m, [app.id]: 'Enter a valid amount' })); return }
     setSaving(s => ({ ...s, [app.id]: true }))
-    // Update bid_amount if changed
     if (rawAmt && parseFloat(rawAmt) !== app.bid_amount) {
       await supabase.from('campaign_applications').update({ bid_amount: amt }).eq('id', app.id)
       setLocalApps(prev => prev.map(a => a.id === app.id ? { ...a, bid_amount: amt } : a))
@@ -1322,25 +1390,80 @@ function PaymentsView({ applications, onUpdate }: { applications: Application[];
     setTimeout(() => setMsg(m => ({ ...m, [app.id]: '' })), 2500)
   }
 
+  const paidTotal    = localApps.filter(a => a.status === 'success').reduce((s, a) => s + (a.bid_amount ?? 0), 0)
+    + requests.filter(r => r.status === 'paid').reduce((s, r) => s + (r.net_payable ?? 0), 0)
+  const pendingTotal = localApps.filter(a => a.status === 'accepted').reduce((s, a) => s + (a.bid_amount ?? 0), 0)
+    + requests.filter(r => r.status === 'pending').reduce((s, r) => s + (r.net_payable ?? 0), 0)
+
+  const inpSt: React.CSSProperties = { width: '100%', fontSize: 13, padding: '7px 10px', border: '0.5px solid #e5e7eb', borderRadius: 6, background: '#f9fafb', outline: 'none', boxSizing: 'border-box' }
+
   return (
     <div className="bd-body">
       <div className="bd-stat-row">
         <div className="bd-stat"><div className="bd-stat-val" style={{ color: '#3B6D11' }}>{fmt(paidTotal)}</div><div className="bd-stat-lbl">Total paid out</div></div>
         <div className="bd-stat"><div className="bd-stat-val" style={{ color: '#854F0B' }}>{fmt(pendingTotal)}</div><div className="bd-stat-lbl">Pending payment</div></div>
-        <div className="bd-stat"><div className="bd-stat-val">{localApps.filter(a => a.status === 'success').length}</div><div className="bd-stat-lbl">Deals paid</div></div>
-        <div className="bd-stat"><div className="bd-stat-val" style={{ color: '#854F0B' }}>{localApps.filter(a => a.status === 'accepted').length}</div><div className="bd-stat-lbl">Awaiting payment</div></div>
+        <div className="bd-stat"><div className="bd-stat-val">{localApps.filter(a => a.status === 'success').length + requests.filter(r => r.status === 'paid').length}</div><div className="bd-stat-lbl">Deals paid</div></div>
+        <div className="bd-stat"><div className="bd-stat-val" style={{ color: '#854F0B' }}>{localApps.filter(a => a.status === 'accepted').length + requests.filter(r => r.status === 'pending').length}</div><div className="bd-stat-lbl">Awaiting payment</div></div>
       </div>
 
-      {payApps.length === 0 ? (
+      {/* Manual payment request form */}
+      <div className="bd-card" style={{ marginBottom: 16 }}>
+        <div className="bd-card-hd" style={{ cursor: 'pointer' }} onClick={() => setShowForm(f => !f)}>
+          <span className="bd-card-title">New Payment Request</span>
+          <Btn style={{ fontSize: 12 }}><i className={`ti ${showForm ? 'ti-chevron-up' : 'ti-plus'}`} />{showForm ? 'Cancel' : 'Create'}</Btn>
+        </div>
+        {showForm && (
+          <form onSubmit={submitRequest} style={{ marginTop: 14, display: 'flex', flexDirection: 'column', gap: 12 }}>
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
+              <div>
+                <label style={{ fontSize: 11, fontWeight: 600, color: '#6b7280', display: 'block', marginBottom: 4 }}>Creator Name *</label>
+                <input value={fCreator} onChange={e => setFCreator(e.target.value)} placeholder="e.g. Om Raj" style={inpSt} />
+              </div>
+              <div>
+                <label style={{ fontSize: 11, fontWeight: 600, color: '#6b7280', display: 'block', marginBottom: 4 }}>Campaign Name *</label>
+                <input value={fCampaign} onChange={e => setFCampaign(e.target.value)} placeholder="e.g. Summer Camp 02" style={inpSt} />
+              </div>
+              <div>
+                <label style={{ fontSize: 11, fontWeight: 600, color: '#6b7280', display: 'block', marginBottom: 4 }}>Bid Amount (₹) *</label>
+                <input type="number" value={fBid} onChange={e => setFBid(e.target.value)} placeholder="e.g. 5000" style={inpSt} />
+              </div>
+              <div>
+                <label style={{ fontSize: 11, fontWeight: 600, color: '#6b7280', display: 'block', marginBottom: 4 }}>Final Amount (₹) *</label>
+                <input type="number" value={fFinal} onChange={e => setFFinal(e.target.value)} placeholder="e.g. 4800" style={inpSt} />
+              </div>
+            </div>
+            {fFinal && parseFloat(fFinal) > 0 && (
+              <div style={{ display: 'flex', gap: 16, background: '#f0fdf4', border: '1px solid #bbf7d0', borderRadius: 8, padding: '8px 14px', fontSize: 12 }}>
+                <span>TDS (2%): <b>₹{Math.round(parseFloat(fFinal) * 0.02).toLocaleString()}</b></span>
+                <span>Net Payable: <b style={{ color: '#3B6D11' }}>₹{Math.round(parseFloat(fFinal) * 0.98).toLocaleString()}</b></span>
+              </div>
+            )}
+            <div>
+              <label style={{ fontSize: 11, fontWeight: 600, color: '#6b7280', display: 'block', marginBottom: 4 }}>Notes (optional)</label>
+              <input value={fNotes} onChange={e => setFNotes(e.target.value)} placeholder="Any instructions or remarks" style={inpSt} />
+            </div>
+            {formErr && <div style={{ fontSize: 12, color: '#dc2626', background: '#fee2e2', borderRadius: 6, padding: '6px 10px' }}>{formErr}</div>}
+            <div style={{ display: 'flex', gap: 8 }}>
+              <Btn variant="green" style={{ fontSize: 12 }}>
+                {submitting ? '…' : <><i className="ti ti-send" />Submit Request</>}
+              </Btn>
+              <Btn style={{ fontSize: 12 }} onClick={() => setShowForm(false)}>Cancel</Btn>
+            </div>
+          </form>
+        )}
+      </div>
+
+      {/* Combined table */}
+      {payApps.length === 0 && requests.length === 0 ? (
         <div className="bd-card" style={{ textAlign: 'center', padding: '48px 24px' }}>
           <i className="ti ti-credit-card" style={{ fontSize: 36, color: '#d1d5db', display: 'block', marginBottom: 14 }} />
           <div style={{ fontWeight: 600, fontSize: 15, color: '#111827', marginBottom: 8 }}>No payment requests yet</div>
-          <div style={{ fontSize: 13, color: '#6b7280' }}>Accept creator applications first, then come back here to process payments.</div>
+          <div style={{ fontSize: 13, color: '#6b7280' }}>Create a manual request above or accept a creator application.</div>
         </div>
       ) : (
         <div className="bd-card">
           <div className="bd-card-hd">
-            <span className="bd-card-title">Deals to pay</span>
+            <span className="bd-card-title">All Payments</span>
           </div>
           <div style={{ overflowX: 'auto' }}>
             <table className="bd-tbl" style={{ minWidth: 700 }}>
@@ -1348,6 +1471,7 @@ function PaymentsView({ applications, onUpdate }: { applications: Application[];
                 <tr><th>Creator</th><th>Campaign</th><th>Bid amount</th><th>Final amount</th><th>TDS (2%)</th><th>Net payable</th><th>Status</th><th>Action</th></tr>
               </thead>
               <tbody>
+                {/* Application-based rows */}
                 {payApps.map(app => {
                   const c = app.creators; const av = avColor(app.creator_id)
                   const s = STATUS[app.status] ?? { label: app.status, cls: 'b-gray' }
@@ -1375,12 +1499,9 @@ function PaymentsView({ applications, onUpdate }: { applications: Application[];
                         ) : (
                           <div style={{ position: 'relative' }}>
                             <span style={{ position: 'absolute', left: 8, top: '50%', transform: 'translateY(-50%)', color: '#6b7280', fontSize: 12 }}>₹</span>
-                            <input
-                              type="number"
-                              value={amounts[app.id] ?? (bidAmt || '')}
+                            <input type="number" value={amounts[app.id] ?? (bidAmt || '')}
                               onChange={e => setAmounts(a => ({ ...a, [app.id]: e.target.value }))}
-                              style={{ width: 90, padding: '4px 6px 4px 18px', fontSize: 12, border: '0.5px solid #e5e7eb', borderRadius: 6, background: '#f9fafb', outline: 'none' }}
-                            />
+                              style={{ width: 90, padding: '4px 6px 4px 18px', fontSize: 12, border: '0.5px solid #e5e7eb', borderRadius: 6, background: '#f9fafb', outline: 'none' }} />
                           </div>
                         )}
                       </td>
@@ -1392,11 +1513,51 @@ function PaymentsView({ applications, onUpdate }: { applications: Application[];
                           <div style={{ fontSize: 11, color: '#3B6D11', fontWeight: 600 }}>✓ Paid</div>
                         ) : (
                           <div style={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
-                            <Btn variant="green" style={{ fontSize: 11, padding: '3px 10px' }}
-                              onClick={() => markPaid(app)}>
+                            <Btn variant="green" style={{ fontSize: 11, padding: '3px 10px' }} onClick={() => markPaid(app)}>
                               {saving[app.id] ? '…' : <><i className="ti ti-check" />Mark Paid</>}
                             </Btn>
                             {msg[app.id] && <div style={{ fontSize: 10, color: msg[app.id].startsWith('✓') ? '#3B6D11' : '#A32D2D' }}>{msg[app.id]}</div>}
+                          </div>
+                        )}
+                      </td>
+                    </tr>
+                  )
+                })}
+                {/* Manual payment request rows */}
+                {requests.map(req => {
+                  const isPaid = req.status === 'paid'
+                  const av = { bg: '#ede9fe', color: '#7c3aed' }
+                  return (
+                    <tr key={req.id}>
+                      <td>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                          <div className="av" style={{ background: av.bg, color: av.color }}>{initFrom(req.creator_name)}</div>
+                          <div>
+                            <div style={{ fontSize: 12, fontWeight: 500 }}>{req.creator_name}</div>
+                            <div style={{ fontSize: 10, color: '#9ca3af' }}>Manual</div>
+                          </div>
+                        </div>
+                      </td>
+                      <td style={{ fontSize: 12 }}>{req.campaign_name}</td>
+                      <td><b style={{ fontSize: 12 }}>₹{req.bid_amount.toLocaleString()}</b></td>
+                      <td><b style={{ fontSize: 12 }}>₹{req.final_amount.toLocaleString()}</b></td>
+                      <td style={{ fontSize: 12, color: '#6b7280' }}>₹{req.tds_amount.toLocaleString()}</td>
+                      <td><b style={{ fontSize: 12, color: '#3B6D11' }}>₹{req.net_payable.toLocaleString()}</b></td>
+                      <td>
+                        <span className={`badge ${isPaid ? 'b-ok' : 'b-warn'}`}>{isPaid ? 'Paid' : 'Pending'}</span>
+                      </td>
+                      <td>
+                        {isPaid ? (
+                          <div style={{ fontSize: 11, color: '#3B6D11', fontWeight: 600 }}>✓ Paid</div>
+                        ) : (
+                          <div style={{ display: 'flex', gap: 4, flexDirection: 'column' }}>
+                            <Btn variant="green" style={{ fontSize: 11, padding: '3px 10px' }} onClick={() => markRequestPaid(req)}>
+                              {saving[req.id] ? '…' : <><i className="ti ti-check" />Mark Paid</>}
+                            </Btn>
+                            <Btn variant="red" style={{ fontSize: 11, padding: '3px 10px' }} onClick={() => deleteRequest(req.id)}>
+                              <i className="ti ti-trash" />Delete
+                            </Btn>
+                            {msg[req.id] && <div style={{ fontSize: 10, color: '#3B6D11' }}>{msg[req.id]}</div>}
                           </div>
                         )}
                       </td>
@@ -2974,12 +3135,15 @@ function SettingsView({ brand, user }: { brand: Brand | null; user: { id: string
 }
 
 // ─── Brand Messages View ─────────────────────────────────────────────────────
-function MessagesView({ conversations, userId, brandName }: {
+function MessagesView({ conversations, userId, brandName, pendingConv, onPendingConvConsumed }: {
   conversations: BrandConversation[]
   userId: string
   brandName: string
+  pendingConv?: BrandConversation | null
+  onPendingConvConsumed?: () => void
 }) {
   const supabase   = createClient()
+  const [liveConvs, setLiveConvs] = useState<BrandConversation[]>(conversations)
   const [selected,  setSelected]  = useState<BrandConversation | null>(conversations[0] ?? null)
   const [messages,  setMessages]  = useState<BrandMessage[]>([])
   const [loadingM,  setLoadingM]  = useState(false)
@@ -2987,7 +3151,15 @@ function MessagesView({ conversations, userId, brandName }: {
   const [sending,   setSending]   = useState(false)
   const bottomRef  = useRef<HTMLDivElement>(null)
 
-  useEffect(() => { if (conversations[0]) loadMessages(conversations[0]) }, [])
+  // When a new conversation is opened from Applications tab, inject it and auto-select
+  useEffect(() => {
+    if (!pendingConv) return
+    setLiveConvs(prev => prev.find(c => c.id === pendingConv.id) ? prev : [pendingConv, ...prev])
+    loadMessages(pendingConv)
+    onPendingConvConsumed?.()
+  }, [pendingConv?.id])
+
+  useEffect(() => { if (liveConvs[0] && !selected) loadMessages(liveConvs[0]) }, [])
 
   // Auto-scroll to bottom when messages change
   useEffect(() => { bottomRef.current?.scrollIntoView({ behavior: 'smooth' }) }, [messages])
@@ -3057,7 +3229,7 @@ function MessagesView({ conversations, userId, brandName }: {
     return name.split(' ').filter(Boolean).map((w: string) => w[0]).join('').slice(0, 2).toUpperCase()
   }
 
-  if (conversations.length === 0) {
+  if (liveConvs.length === 0) {
     return (
       <div className="bd-body">
         <div className="bd-card" style={{ textAlign: 'center', padding: '60px 24px' }}>
@@ -3075,7 +3247,7 @@ function MessagesView({ conversations, userId, brandName }: {
         {/* Conversation list */}
         <div style={{ borderRight: '0.5px solid #e5e7eb', overflowY: 'auto', background: '#f9fafb' }}>
           <div style={{ padding: '10px 14px', borderBottom: '0.5px solid #e5e7eb', fontSize: 10, fontWeight: 700, color: '#9ca3af', textTransform: 'uppercase', letterSpacing: '.07em' }}>Inbox</div>
-          {conversations.map(conv => {
+          {liveConvs.map(conv => {
             const isActive = selected?.id === conv.id
             return (
               <div key={conv.id} onClick={() => loadMessages(conv)}
@@ -3402,10 +3574,11 @@ function NoBrandSetup({ user }: { user: { id: string; email: string } }) {
 // ─── Main Component ───────────────────────────────────────────────────────────
 export default function BrandDashboard({ user, brand, profile, campaigns, applications, deals, conversations, teamMembers, unreadNotifs, initials }: Props) {
   const router  = useRouter()
-  const [tab,       setTab]      = useState<Tab>('overview')
-  const [apps,      setApps]     = useState(applications)
-  const [liveDeals, setLiveDeals] = useState<Deal[]>(deals)
-  const [deptFocus, setDeptFocus] = useState<string | undefined>()
+  const [tab,        setTab]       = useState<Tab>('overview')
+  const [apps,       setApps]      = useState(applications)
+  const [liveDeals,  setLiveDeals] = useState<Deal[]>(deals)
+  const [deptFocus,  setDeptFocus] = useState<string | undefined>()
+  const [pendingConv, setPendingConv] = useState<BrandConversation | null>(null)
 
   const supabase = createClient()
 
@@ -3528,13 +3701,13 @@ export default function BrandDashboard({ user, brand, profile, campaigns, applic
             brandId={brand?.id ?? ''}
             onUpdate={updateApp}
             onDealCreated={deal => setLiveDeals(d => [...d, deal])}
-            onGoTab={t => setTab(t as Tab)}
+            onGoTab={(t, conv?) => { if (conv) setPendingConv(conv as BrandConversation); setTab(t as Tab) }}
           />}
-          {tab === 'messages'   && <MessagesView conversations={conversations} userId={user.id} brandName={brandName} />}
+          {tab === 'messages'   && <MessagesView conversations={conversations} userId={user.id} brandName={brandName} pendingConv={pendingConv} onPendingConvConsumed={() => setPendingConv(null)} />}
           {tab === 'media'      && <PromoView brand={brand} />}
           {tab === 'dept'       && <DeptView brandId={brand?.id ?? ''} teamMembers={teamMembers} deals={liveDeals} focusDept={deptFocus} />}
           {tab === 'content'    && <ContentView brandId={brand?.id ?? ''} />}
-          {tab === 'payments'   && <PaymentsView applications={apps} onUpdate={updateApp} />}
+          {tab === 'payments'   && <PaymentsView applications={apps} onUpdate={updateApp} brandId={brand?.id ?? ''} userId={user.id} />}
           {tab === 'tasks'      && <TasksView brandId={brand?.id ?? ''} teamMembers={teamMembers} userId={user.id} deals={liveDeals} />}
           {tab === 'team'       && <TeamView teamMembers={teamMembers} brandId={brand?.id ?? ''} ownerEmail={user.email} brandName={brandName} />}
           {tab === 'reports'    && <ReportsView campaigns={campaigns} applications={apps} />}

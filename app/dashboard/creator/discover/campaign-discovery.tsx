@@ -28,10 +28,10 @@ interface Campaign {
 
 // ─── Theme ────────────────────────────────────────────────────
 const T = {
-  bg: '#090c12', side: '#0b0e16', card: '#10141e', cardHov: '#141926',
-  elev: '#161b28', border: '#1d2433',
-  text: '#f3f5f8', dim: '#98a2b3', faint: '#5e6a7d',
-  green: '#4ade80', amber: '#f5a623', red: '#f4574d',
+  bg: '#f7f8fa', side: '#ffffff', card: '#ffffff', cardHov: '#f0f2f5',
+  elev: '#f3f4f6', border: '#e5e7eb',
+  text: '#111827', dim: '#6b7280', faint: '#9ca3af',
+  green: '#16a34a', amber: '#d97706', red: '#dc2626',
   purple: '#5710fc', purpleL: '#7c3aed',
 }
 
@@ -44,7 +44,7 @@ const DEAL_COLORS: Record<string, string> = {
   paid_post:  '#6b7dff',
   affiliate:  '#f5a623',
   gifting:    '#4ade80',
-  ambassador: '#a78bfa',
+  ambassador: '#7c3aed',
 }
 const DEAL_LABELS: Record<string, string> = {
   paid_post: 'Paid Post', affiliate: 'Affiliate', gifting: 'Gifting', ambassador: 'Ambassador',
@@ -223,7 +223,7 @@ export default function CampaignDiscovery({ userInitials, initialCampaigns = [],
           <p style={labelStyle}>Budget / Payout</p>
           <div style={{ display: 'flex', flexWrap: 'wrap', gap: 5 }}>
             {BUDGET_OPTS.map((o, i) => (
-              <button key={i} onClick={() => setPBudgetIdx(i)} style={chipStyle(pBudgetIdx === i, T.green, '#052e16', T.green)}>{o.label}</button>
+              <button key={i} onClick={() => setPBudgetIdx(i)} style={chipStyle(pBudgetIdx === i, T.green, '#dcfce7', T.green)}>{o.label}</button>
             ))}
           </div>
         </div>
@@ -265,7 +265,7 @@ export default function CampaignDiscovery({ userInitials, initialCampaigns = [],
           })}
         </nav>
         <div style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: 12 }}>
-          <span style={{ fontSize: 11, fontWeight: 700, background: '#052e16', color: T.green, border: '1px solid #166534', padding: '3px 10px', borderRadius: 20 }}>Creator</span>
+          <span style={{ fontSize: 11, fontWeight: 700, background: '#dcfce7', color: T.green, border: '1px solid #166534', padding: '3px 10px', borderRadius: 20 }}>Creator</span>
           <button onClick={signOut} style={{ fontSize: 12, color: T.dim, background: 'none', border: `1px solid ${T.border}`, cursor: 'pointer', padding: '5px 12px', borderRadius: 8 }}>Sign out</button>
           <div onClick={() => router.push('/dashboard/creator/profile')} title="View profile"
             style={{ width: 34, height: 34, borderRadius: '50%', background: `linear-gradient(135deg,${T.green},#22c55e)`, display: 'grid', placeItems: 'center', fontWeight: 700, color: '#000', fontSize: 13, cursor: 'pointer' }}>{userInitials ?? 'C'}</div>
@@ -277,7 +277,7 @@ export default function CampaignDiscovery({ userInitials, initialCampaigns = [],
 
         <main style={{ flex: 1, padding: '24px 28px', minWidth: 0 }}>
           <div style={{ marginBottom: 20 }}>
-            <span style={{ display: 'inline-block', fontSize: 11, fontWeight: 700, background: '#052e16', color: T.green, border: '1px solid #166534', padding: '2px 10px', borderRadius: 20, marginBottom: 8 }}>Creator workspace</span>
+            <span style={{ display: 'inline-block', fontSize: 11, fontWeight: 700, background: '#dcfce7', color: T.green, border: '1px solid #166534', padding: '2px 10px', borderRadius: 20, marginBottom: 8 }}>Creator workspace</span>
             <h1 style={{ fontSize: 26, fontWeight: 800, margin: '0 0 4px', letterSpacing: '-0.4px' }}>Discover Campaigns</h1>
             <div style={{ color: T.dim, fontSize: 14 }}>{loading ? 'Loading…' : `${total.toLocaleString()} campaigns available`}</div>
           </div>
@@ -311,7 +311,7 @@ export default function CampaignDiscovery({ userInitials, initialCampaigns = [],
             </div>
             <div style={{ display: 'flex', background: T.card, border: `1px solid ${T.border}`, borderRadius: 10, overflow: 'hidden' }}>
               {([25, 50, 100] as const).map(n => (
-                <button key={n} onClick={() => { setPageSize(n); setPage(0) }} style={{ padding: '8px 13px', background: pageSize === n ? '#1d1145' : 'transparent', color: pageSize === n ? '#a78bfa' : T.dim, border: 'none', cursor: 'pointer', fontSize: 13, fontWeight: 600 }}>{n}</button>
+                <button key={n} onClick={() => { setPageSize(n); setPage(0) }} style={{ padding: '8px 13px', background: pageSize === n ? '#ede9fe' : 'transparent', color: pageSize === n ? '#7c3aed' : T.dim, border: 'none', cursor: 'pointer', fontSize: 13, fontWeight: 600 }}>{n}</button>
               ))}
             </div>
           </div>
@@ -390,7 +390,7 @@ function CampaignCard({ campaign: c, layout, onApply }: { campaign: Campaign; la
 
   return (
     <article onMouseEnter={() => setHov(true)} onMouseLeave={() => setHov(false)}
-      style={{ background: hov ? T.cardHov : T.card, border: `1px solid ${T.border}`, borderRadius: 14, overflow: 'hidden', transition: 'background .15s, box-shadow .15s', boxShadow: hov ? '0 4px 20px rgba(0,0,0,.4)' : 'none', display: 'flex', flexDirection: 'column' }}>
+      style={{ background: hov ? T.cardHov : T.card, border: `1px solid ${T.border}`, borderRadius: 14, overflow: 'hidden', transition: 'background .15s, box-shadow .15s', boxShadow: hov ? '0 4px 20px rgba(0,0,0,.08)' : 'none', display: 'flex', flexDirection: 'column' }}>
       <div style={{ height: 3, background: platColor }} />
       <div style={{ padding: 16, flex: 1, display: 'flex', flexDirection: 'column', gap: 12 }}>
         {/* Header */}
@@ -402,7 +402,7 @@ function CampaignCard({ campaign: c, layout, onApply }: { campaign: Campaign; la
             </div>
             <div style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
               <span style={{ color: T.dim, fontSize: 12 }}>{c.brands?.name ?? 'Brand'}</span>
-              {c.brands?.is_verified && <span style={{ fontSize: 9, background: '#1d1145', color: '#a78bfa', padding: '1px 5px', borderRadius: 8, fontWeight: 700 }}>✓</span>}
+              {c.brands?.is_verified && <span style={{ fontSize: 9, background: '#ede9fe', color: '#7c3aed', padding: '1px 5px', borderRadius: 8, fontWeight: 700 }}>✓</span>}
             </div>
           </div>
         </div>
@@ -482,8 +482,8 @@ function PagBtn({ children, onClick, disabled, active }: { children: React.React
     <button onClick={onClick} disabled={disabled} style={{
       minWidth: 36, height: 36, padding: '0 12px', borderRadius: 8,
       border: `1px solid ${active ? T.purple : T.border}`,
-      background: active ? '#1d1145' : 'transparent',
-      color: active ? '#a78bfa' : disabled ? T.faint : T.dim,
+      background: active ? '#ede9fe' : 'transparent',
+      color: active ? '#7c3aed' : disabled ? T.faint : T.dim,
       cursor: disabled ? 'not-allowed' : 'pointer', fontSize: 13, fontWeight: 600,
     }}>{children}</button>
   )

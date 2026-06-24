@@ -342,6 +342,8 @@ export default function AgencyDashboard({ user, agency, managed, campaigns, appl
   const [search, setSearch]       = useState('')
   const [showAddCreator, setShowAddCreator] = useState(false)
   const [managedList, setManagedList]       = useState<any[]>(managed)
+  const [appFilter,  setAppFilter]  = useState('all')
+  const [dealFilter, setDealFilter] = useState('all')
 
   async function signOut() {
     await supabase.auth.signOut()
@@ -373,8 +375,6 @@ export default function AgencyDashboard({ user, agency, managed, campaigns, appl
 
   const newApps = applications.filter((a: any) => a.status === 'applied').length
   const activeDeals = deals.filter((d: any) => d.status === 'active').length
-  const [appFilter,  setAppFilter]  = useState('all')
-  const [dealFilter, setDealFilter] = useState('all')
 
   const NAV = [
     { key: 'discover',     label: 'Discover',        badge: 0 },

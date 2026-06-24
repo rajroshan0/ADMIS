@@ -45,10 +45,10 @@ interface Country { name: string; flag: string; cnt: number }
 
 // ─── Theme ────────────────────────────────────────────────────
 const T = {
-  bg: '#090c12', side: '#0b0e16', card: '#10141e', cardHov: '#141926',
-  elev: '#161b28', border: '#1d2433', borderS: '#161b27',
-  text: '#f3f5f8', dim: '#98a2b3', faint: '#5e6a7d',
-  green: '#4ade80', amber: '#f5a623', red: '#f4574d',
+  bg: '#f7f8fa', side: '#ffffff', card: '#ffffff', cardHov: '#f0f2f5',
+  elev: '#f3f4f6', border: '#e5e7eb', borderS: '#e5e7eb',
+  text: '#111827', dim: '#6b7280', faint: '#9ca3af',
+  green: '#16a34a', amber: '#d97706', red: '#dc2626',
   purple: '#5710fc', purpleL: '#7c3aed',
 }
 
@@ -142,17 +142,17 @@ function AdminEditModal({ creator, onClose, onSaved }: { creator: Creator; onClo
   }
 
   const inputStyle: React.CSSProperties = {
-    width: '100%', background: '#0f0f1a', border: '1px solid #1d2433',
-    borderRadius: 7, padding: '8px 10px', color: '#f3f5f8', fontSize: 13, outline: 'none', boxSizing: 'border-box',
+    width: '100%', background: '#ffffff', border: '1px solid #e5e7eb',
+    borderRadius: 7, padding: '8px 10px', color: '#111827', fontSize: 13, outline: 'none', boxSizing: 'border-box',
   }
   const labelStyle2: React.CSSProperties = { fontSize: 11, color: '#5e6a7d', marginBottom: 4, display: 'block' }
 
   return (
-    <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,.7)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 9999 }}
+    <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,.4)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 9999 }}
          onClick={e => { if (e.target === e.currentTarget) onClose() }}>
-      <div style={{ background: '#10141e', border: '1px solid #1d2433', borderRadius: 14, padding: 28, width: 460, maxWidth: '95vw' }}>
+      <div style={{ background: '#ffffff', border: '1px solid #e5e7eb', borderRadius: 14, padding: 28, width: 460, maxWidth: '95vw' }}>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 }}>
-          <h2 style={{ margin: 0, fontSize: 16, fontWeight: 700, color: '#f3f5f8' }}>Edit Creator</h2>
+          <h2 style={{ margin: 0, fontSize: 16, fontWeight: 700, color: '#111827' }}>Edit Creator</h2>
           <button onClick={onClose} style={{ background: 'none', border: 'none', color: '#5e6a7d', cursor: 'pointer', fontSize: 20, lineHeight: 1 }}>×</button>
         </div>
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14 }}>
@@ -183,7 +183,7 @@ function AdminEditModal({ creator, onClose, onSaved }: { creator: Creator; onClo
         </div>
         {err && <div style={{ marginTop: 12, color: '#f4574d', fontSize: 12 }}>{err}</div>}
         <div style={{ display: 'flex', gap: 10, marginTop: 20, justifyContent: 'flex-end' }}>
-          <button onClick={onClose} style={{ padding: '8px 18px', background: 'transparent', border: '1px solid #1d2433', borderRadius: 8, color: '#98a2b3', cursor: 'pointer', fontSize: 13 }}>Cancel</button>
+          <button onClick={onClose} style={{ padding: '8px 18px', background: 'transparent', border: '1px solid #e5e7eb', borderRadius: 8, color: '#6b7280', cursor: 'pointer', fontSize: 13 }}>Cancel</button>
           <button onClick={save} disabled={saving} style={{ padding: '8px 20px', background: '#5710fc', border: 'none', borderRadius: 8, color: '#fff', cursor: saving ? 'not-allowed' : 'pointer', fontSize: 13, fontWeight: 600, opacity: saving ? .6 : 1 }}>
             {saving ? 'Saving…' : 'Save Changes'}
           </button>
@@ -336,9 +336,9 @@ export default function CreatorDiscovery({
       <div style={{ padding: '18px 14px', display: 'flex', flexDirection: 'column', gap: 20 }}>
 
         {activeFilters > 0 && (
-          <div style={{ background: '#1d1145', border: '1px solid #3b1f8a', borderRadius: 8, padding: '7px 10px', fontSize: 12, color: '#a78bfa', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+          <div style={{ background: '#ede9fe', border: '1px solid #3b1f8a', borderRadius: 8, padding: '7px 10px', fontSize: 12, color: '#7c3aed', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
             <span>{activeFilters} filter{activeFilters > 1 ? 's' : ''} active</span>
-            <button onClick={resetFilters} style={{ background: 'none', border: 'none', color: '#a78bfa', cursor: 'pointer', fontSize: 11, textDecoration: 'underline' }}>Clear all</button>
+            <button onClick={resetFilters} style={{ background: 'none', border: 'none', color: '#7c3aed', cursor: 'pointer', fontSize: 11, textDecoration: 'underline' }}>Clear all</button>
           </div>
         )}
 
@@ -368,7 +368,7 @@ export default function CreatorDiscovery({
               const active = pMinF === pr.min && pMaxF === pr.max
               return (
                 <button key={pr.label} onClick={() => setPreset(pr)}
-                  style={chipStyle(active, T.purple, '#1d1145', '#a78bfa')}>{pr.label}</button>
+                  style={chipStyle(active, T.purple, '#ede9fe', '#7c3aed')}>{pr.label}</button>
               )
             })}
           </div>
@@ -393,14 +393,14 @@ export default function CreatorDiscovery({
           <p style={labelStyle}>Engagement Rate</p>
           <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4 }}>
             {ENG_OPTS.map(o => (
-              <button key={o.v} onClick={() => setPMinE(o.v)} style={chipStyle(pMinE === o.v, T.green, '#052e16', '#4ade80')}>{o.label}</button>
+              <button key={o.v} onClick={() => setPMinE(o.v)} style={chipStyle(pMinE === o.v, T.green, '#dcfce7', '#16a34a')}>{o.label}</button>
             ))}
           </div>
         </div>
 
         {/* Category */}
         <div>
-          <p style={labelStyle}>Category {pCategories.size > 0 && <span style={{ color: '#a78bfa' }}>({pCategories.size})</span>}</p>
+          <p style={labelStyle}>Category {pCategories.size > 0 && <span style={{ color: '#7c3aed' }}>({pCategories.size})</span>}</p>
           <input
             type="text" placeholder="Search categories…" value={catSearch} onChange={e => setCatSearch(e.target.value)}
             style={{ width: '100%', background: T.elev, border: `1px solid ${T.border}`, borderRadius: 6, padding: '5px 8px', color: T.text, fontSize: 12, marginBottom: 7, outline: 'none' }}
@@ -410,7 +410,7 @@ export default function CreatorDiscovery({
               const on = pCategories.has(cat)
               return (
                 <button key={cat} onClick={() => { const n = new Set(pCategories); on ? n.delete(cat) : n.add(cat); setPCategories(n) }}
-                  style={chipStyle(on, T.purple, '#1d1145', '#a78bfa')}>{cat}</button>
+                  style={chipStyle(on, T.purple, '#ede9fe', '#7c3aed')}>{cat}</button>
               )
             })}
           </div>
@@ -418,7 +418,7 @@ export default function CreatorDiscovery({
 
         {/* Country */}
         <div>
-          <p style={labelStyle}>Country {pCountries.size > 0 && <span style={{ color: '#a78bfa' }}>({pCountries.size})</span>}</p>
+          <p style={labelStyle}>Country {pCountries.size > 0 && <span style={{ color: '#7c3aed' }}>({pCountries.size})</span>}</p>
           <input
             type="text" placeholder="Search countries…" value={countrySearch} onChange={e => setCountrySearch(e.target.value)}
             style={{ width: '100%', background: T.elev, border: `1px solid ${T.border}`, borderRadius: 6, padding: '5px 8px', color: T.text, fontSize: 12, marginBottom: 7, outline: 'none' }}
@@ -479,7 +479,7 @@ export default function CreatorDiscovery({
         </div>
 
         <div style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: 12 }}>
-          <span style={{ fontSize: 11, fontWeight: 700, background: '#1d1145', color: '#a78bfa', border: '1px solid #3b1f8a', padding: '3px 10px', borderRadius: 20 }}>Brand</span>
+          <span style={{ fontSize: 11, fontWeight: 700, background: '#ede9fe', color: '#7c3aed', border: '1px solid #3b1f8a', padding: '3px 10px', borderRadius: 20 }}>Brand</span>
           <button onClick={signOut} style={{ fontSize: 12, color: T.dim, background: 'none', border: `1px solid ${T.border}`, cursor: 'pointer', padding: '5px 12px', borderRadius: 8 }}>Sign out</button>
           <div onClick={() => router.push('/dashboard/brand/profile')} title="Brand dashboard"
             style={{ width: 34, height: 34, borderRadius: '50%', background: `linear-gradient(135deg,${T.purple},#a855f7)`, display: 'grid', placeItems: 'center', fontWeight: 700, color: '#fff', fontSize: 13, cursor: 'pointer' }}>
@@ -495,7 +495,7 @@ export default function CreatorDiscovery({
         <main style={{ flex: 1, padding: '24px 28px', minWidth: 0 }}>
           {/* Page header */}
           <div style={{ marginBottom: 18 }}>
-            <span style={{ display: 'inline-block', fontSize: 11, fontWeight: 700, background: '#1d1145', color: '#a78bfa', border: '1px solid #3b1f8a', padding: '2px 10px', borderRadius: 20, marginBottom: 6 }}>
+            <span style={{ display: 'inline-block', fontSize: 11, fontWeight: 700, background: '#ede9fe', color: '#7c3aed', border: '1px solid #3b1f8a', padding: '2px 10px', borderRadius: 20, marginBottom: 6 }}>
               {mode === 'discover' ? 'Discover & Bid' : 'Contact Sheet'}
             </span>
             <h1 style={{ fontSize: 24, fontWeight: 800, margin: '0 0 4px', letterSpacing: '-0.4px' }}>
@@ -503,7 +503,7 @@ export default function CreatorDiscovery({
             </h1>
             <div style={{ color: T.dim, fontSize: 13 }}>
               {loading ? 'Searching…' : `${total.toLocaleString()} creators`}
-              {activeFilters > 0 && <span style={{ color: '#a78bfa', marginLeft: 6 }}>· {activeFilters} filter{activeFilters > 1 ? 's' : ''} applied</span>}
+              {activeFilters > 0 && <span style={{ color: '#7c3aed', marginLeft: 6 }}>· {activeFilters} filter{activeFilters > 1 ? 's' : ''} applied</span>}
             </div>
           </div>
 
@@ -535,7 +535,7 @@ export default function CreatorDiscovery({
             )}
             <div style={{ display: 'flex', background: T.card, border: `1px solid ${T.border}`, borderRadius: 10, overflow: 'hidden' }}>
               {([25, 50, 100] as const).map(n => (
-                <button key={n} onClick={() => { setPageSize(n); setPage(0) }} style={{ padding: '8px 12px', background: pageSize === n ? '#1d1145' : 'transparent', color: pageSize === n ? '#a78bfa' : T.dim, border: 'none', cursor: 'pointer', fontSize: 13, fontWeight: 600 }}>{n}</button>
+                <button key={n} onClick={() => { setPageSize(n); setPage(0) }} style={{ padding: '8px 12px', background: pageSize === n ? '#ede9fe' : 'transparent', color: pageSize === n ? '#7c3aed' : T.dim, border: 'none', cursor: 'pointer', fontSize: 13, fontWeight: 600 }}>{n}</button>
               ))}
             </div>
           </div>
@@ -649,7 +649,7 @@ function ContactSheet({ creators, onBid, onContact }: { creators: Creator[]; onB
                       <div>
                         <div style={{ fontWeight: 700, fontSize: 13, color: T.text }}>
                           {c.full_name || c.username || '—'}
-                          {c.is_verified && <span style={{ marginLeft: 5, fontSize: 10, background: '#1d1145', color: '#a78bfa', padding: '1px 5px', borderRadius: 8 }}>✓</span>}
+                          {c.is_verified && <span style={{ marginLeft: 5, fontSize: 10, background: '#ede9fe', color: '#7c3aed', padding: '1px 5px', borderRadius: 8 }}>✓</span>}
                         </div>
                         <div style={{ fontSize: 11, color: T.faint }}>@{c.username}</div>
                       </div>
@@ -768,7 +768,7 @@ function CreatorCard({ creator: c, layout, onContact, onBid, isAdmin = false, on
         <div style={{ flex: '0 0 170px', minWidth: 0 }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
             <span style={{ fontWeight: 700, fontSize: 13, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{name}</span>
-            {c.is_verified && <span style={{ fontSize: 9, background: '#1d1145', color: '#a78bfa', padding: '1px 5px', borderRadius: 8 }}>✓</span>}
+            {c.is_verified && <span style={{ fontSize: 9, background: '#ede9fe', color: '#7c3aed', padding: '1px 5px', borderRadius: 8 }}>✓</span>}
           </div>
           <div style={{ color: T.faint, fontSize: 11 }}>{handle}</div>
         </div>
@@ -800,7 +800,7 @@ function CreatorCard({ creator: c, layout, onContact, onBid, isAdmin = false, on
 
   return (
     <article onMouseEnter={() => setHov(true)} onMouseLeave={() => setHov(false)}
-      style={{ background: hov ? T.cardHov : T.card, border: `1px solid ${T.border}`, borderRadius: 14, overflow: 'hidden', transition: 'background .12s, box-shadow .12s', boxShadow: hov ? '0 4px 20px rgba(0,0,0,.4)' : 'none' }}>
+      style={{ background: hov ? T.cardHov : T.card, border: `1px solid ${T.border}`, borderRadius: 14, overflow: 'hidden', transition: 'background .12s, box-shadow .12s', boxShadow: hov ? '0 4px 20px rgba(0,0,0,.08)' : 'none' }}>
       <div style={{ height: 3, background: pcfg.g }} />
       <div style={{ padding: 16 }}>
         <div style={{ display: 'flex', gap: 10, marginBottom: 12 }}>
@@ -808,7 +808,7 @@ function CreatorCard({ creator: c, layout, onContact, onBid, isAdmin = false, on
           <div style={{ flex: 1, minWidth: 0 }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: 5, marginBottom: 2 }}>
               <span style={{ fontWeight: 700, fontSize: 13, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{name}</span>
-              {c.is_verified && <span style={{ fontSize: 9, background: '#1d1145', color: '#a78bfa', padding: '1px 5px', borderRadius: 8 }}>✓</span>}
+              {c.is_verified && <span style={{ fontSize: 9, background: '#ede9fe', color: '#7c3aed', padding: '1px 5px', borderRadius: 8 }}>✓</span>}
             </div>
             <div style={{ color: T.faint, fontSize: 11, marginBottom: 5 }}>{handle}</div>
             <div style={{ display: 'flex', alignItems: 'center', gap: 4, flexWrap: 'wrap' }}>
@@ -876,7 +876,7 @@ function Stat({ label, value, color }: { label: string; value: string; color: st
 
 function PagBtn({ children, onClick, disabled, active }: { children: React.ReactNode; onClick: () => void; disabled?: boolean; active?: boolean }) {
   return (
-    <button onClick={onClick} disabled={disabled} style={{ minWidth: 34, height: 34, padding: '0 10px', borderRadius: 8, border: `1px solid ${active ? T.purple : T.border}`, background: active ? '#1d1145' : 'transparent', color: active ? '#a78bfa' : disabled ? T.faint : T.dim, cursor: disabled ? 'not-allowed' : 'pointer', fontSize: 13, fontWeight: 600 }}>
+    <button onClick={onClick} disabled={disabled} style={{ minWidth: 34, height: 34, padding: '0 10px', borderRadius: 8, border: `1px solid ${active ? T.purple : T.border}`, background: active ? '#ede9fe' : 'transparent', color: active ? '#7c3aed' : disabled ? T.faint : T.dim, cursor: disabled ? 'not-allowed' : 'pointer', fontSize: 13, fontWeight: 600 }}>
       {children}
     </button>
   )
